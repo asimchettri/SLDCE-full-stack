@@ -57,26 +57,33 @@ export const datasetAPI = {
     return response.data;
   },
 
-  // Upload dataset
-  upload: async (
-    file: File,
-    name: string,
-    description?: string
-  ): Promise<Dataset> => {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("name", name);
-    if (description) {
-      formData.append("description", description);
-    }
+ 
 
-    const response = await api.post("/api/v1/datasets/upload", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
-    return response.data;
-  },
+// Upload dataset
+upload: async (
+  file: File,
+  name: string,
+  description?: string,
+  labelColumn?: string 
+): Promise<Dataset> => {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("name", name);
+  if (description) {
+    formData.append("description", description);
+  }
+  //  Append label column if provided
+  if (labelColumn) {
+    formData.append("label_column", labelColumn);
+  }
+
+  const response = await api.post("/api/v1/datasets/upload", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return response.data;
+},
 
   // Get dataset stats
   getStats: async (id: number): Promise<DatasetStats> => {
@@ -356,5 +363,47 @@ export const feedbackAPI = {
   // Delete feedback
   delete: async (feedbackId: number): Promise<void> => {
     await api.delete(`/api/v1/feedback/${feedbackId}`);
+  },
+};
+
+//  Corrections API
+export const correctionsAPI = {
+  // Apply corrections
+  apply: async (datasetId: number, iteration: number = 1): Promise<any> => {
+    const response = await api.post(`/api/v1/corrections/apply/${datasetId}`, null, {
+      params: { iteration },
+    });
+    return response.data;
+  },
+
+  // Preview corrections
+  preview: async (datasetId: number, iteration: number = 1): Promise<any> => {
+    const response = await api.get(`/api/v1/corrections/preview/${datasetId}`, {
+      params: { iteration },
+    });
+    return response.data;
+  },
+
+  // Get correction summary
+  getSummary: async (datasetId: number): Promise<any> => {
+    const response = await api.get(`/api/v1/corrections/summary/${datasetId}`);
+    return response.data;
+  },
+};
+
+//  Retrain API
+export const retrainAPI = {
+  // Retrain model
+  retrain: async (datasetId: number, iteration: number = 1, testSize: number = 0.2): Promise<any> => {
+    const response = await api.post(`/api/v1/retrain/retrain/${datasetId}`, null, {
+      params: { iteration, test_size: testSize },
+    });
+    return response.data;
+  },
+
+  // Compare models
+  compare: async (datasetId: number): Promise<any> => {
+    const response = await api.get(`/api/v1/retrain/compare/${datasetId}`);
+    return response.data;
   },
 };

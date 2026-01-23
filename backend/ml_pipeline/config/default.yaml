@@ -1,0 +1,27 @@
+dataset:
+  path: data/raw/adult.csv
+  target_column: income
+  id_column: null
+
+preprocessing:
+  test_size: 0.2
+  random_state: 42
+  scale_numeric: true
+  encode_categorical: true
+
+model:
+  name: random_forest   # random_forest | logistic | svm
+  params:
+    n_estimators: 100
+    max_depth: null
+
+signals:
+  confidence_threshold: 0.6
+  anomaly_contamination: 0.05
+
+fusion:
+  confidence_weight: 0.6
+  anomaly_weight: 0.4
+
+decision:
+  reject_threshold: 0.7

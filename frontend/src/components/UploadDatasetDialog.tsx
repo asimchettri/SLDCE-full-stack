@@ -11,7 +11,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Upload, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // ADDED: Select component
+import { Upload, CheckCircle, XCircle, Loader2, Info } from 'lucide-react'; // ADDED: Info icon
 
 interface UploadDatasetDialogProps {
   open: boolean;
@@ -27,15 +28,22 @@ export function UploadDatasetDialog({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [labelColumn, setLabelColumn] = useState<string>('auto'); 
 
   const uploadMutation = useMutation({
-    mutationFn: (data: { file: File; name: string; description?: string }) =>
-      datasetAPI.upload(data.file, data.name, data.description),
+    mutationFn: (data: { 
+      file: File; 
+      name: string; 
+      description?: string;
+      labelColumn?: string; // ADDED
+    }) =>
+      datasetAPI.upload(data.file, data.name, data.description, data.labelColumn), 
     onSuccess: () => {
       // Reset form
       setName('');
       setDescription('');
       setFile(null);
+      setLabelColumn('auto');
       // Close dialog and refresh
       onSuccess();
     },
@@ -48,7 +56,8 @@ export function UploadDatasetDialog({
     uploadMutation.mutate({ 
       file, 
       name: name.trim(), 
-      description: description.trim() || undefined 
+      description: description.trim() || undefined,
+      labelColumn: labelColumn === 'auto' ? undefined : labelColumn 
     });
   };
 
@@ -68,6 +77,7 @@ export function UploadDatasetDialog({
     setName('');
     setDescription('');
     setFile(null);
+    setLabelColumn('auto');
     uploadMutation.reset();
   };
 
@@ -84,7 +94,8 @@ export function UploadDatasetDialog({
         <DialogHeader>
           <DialogTitle>Upload Dataset</DialogTitle>
           <DialogDescription>
-            Upload a CSV file with your dataset. The last column should contain the labels.
+           
+            Upload a CSV file with your dataset. The label column will be automatically detected.
           </DialogDescription>
         </DialogHeader>
 
@@ -107,7 +118,7 @@ export function UploadDatasetDialog({
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Iris Dataset"
+                placeholder="e.g., Wine Dataset"
                 required
                 disabled={uploadMutation.isPending}
               />
@@ -143,6 +154,49 @@ export function UploadDatasetDialog({
                   </span>
                 </div>
               )}
+            </div>
+
+            {/* Label Column Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="labelColumn">Label Column</Label>
+              <Select
+                value={labelColumn}
+                onValueChange={setLabelColumn}
+                disabled={uploadMutation.isPending}
+              >
+                <SelectTrigger id="labelColumn">
+                  <SelectValue placeholder="Auto-detect label column" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">
+                    Auto-detect (Recommended)
+                  </SelectItem>
+                  <SelectItem value="class">
+                    Column named "class"
+                  </SelectItem>
+                  <SelectItem value="label">
+                    Column named "label"
+                  </SelectItem>
+                  <SelectItem value="target">
+                    Column named "target"
+                  </SelectItem>
+                  <SelectItem value="first">
+                    First column
+                  </SelectItem>
+                  <SelectItem value="last">
+                    Last column
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              
+              {/*  Help text */}
+              <div className="flex items-start gap-2 mt-1 text-xs text-gray-500">
+                <Info className="h-3 w-3 mt-0.5 shrink-0" />
+                <p>
+                  Auto-detect will look for columns named "class", "label", or "target", 
+                  otherwise uses the last column.
+                </p>
+              </div>
             </div>
 
             {uploadMutation.isError && (

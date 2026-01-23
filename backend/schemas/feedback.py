@@ -52,9 +52,9 @@ class FeedbackStatsResponse(BaseModel):
     """Statistics about feedback for a dataset"""
     dataset_id: int
     total_feedback: int
-    accept_count: int
-    reject_count: int
-    modify_count: int
+    accepted: int
+    rejected: int
+    modified: int
     acceptance_rate: float
     avg_review_time: Optional[float] = None
     

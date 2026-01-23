@@ -22,6 +22,8 @@ import {
 import { SuggestionCard } from '@/components/SuggestionCard';
 import { SuggestionStats } from '@/components/SuggestionStats';
 import { FeedbackAnalytics } from '@/components/FeedbackAnalytics';
+import { ApplyCorrectionsButton } from '@/components/ui/ApplyCorrectionsButton'; 
+import { RetrainButton } from '@/components/ui/RetrainButton'; 
 import type { SuggestionStatus } from '@/types/suggestion';
 
 export function CorrectionPage() {
@@ -62,19 +64,24 @@ export function CorrectionPage() {
     enabled: !!selectedDatasetId,
   });
 
-  // Fetch stats
-  const { data: stats } = useQuery({
+  // Fetch stats 
+  const { data: stats, refetch: refetchStats } = useQuery({
     queryKey: ['suggestion-stats', selectedDatasetId],
     queryFn: () => suggestionAPI.getStats(selectedDatasetId!),
     enabled: !!selectedDatasetId,
   });
 
+  // Also refresh stats when status updates
   const handleStatusUpdate = () => {
     refetchSuggestions();
+    refetchStats();
   };
 
   const totalPages = suggestionsResponse?.total_pages || 1;
   const suggestions = suggestionsResponse?.suggestions || [];
+
+  //  Check if there are accepted/modified suggestions
+  const hasAcceptedSuggestions = stats && (stats.accepted + stats.modified) > 0;
 
   return (
     <div className="space-y-6">
@@ -88,15 +95,52 @@ export function CorrectionPage() {
             Review and approve correction suggestions from the detection system
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => refetchSuggestions()}
-          disabled={!selectedDatasetId}
-        >
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => refetchSuggestions()}
+            disabled={!selectedDatasetId}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
       </div>
+
+      {/*  Action Buttons Section */}
+      {selectedDatasetId && hasAcceptedSuggestions && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-blue-900 mb-1">
+                  Ready to Apply Corrections
+                </h3>
+                <p className="text-sm text-blue-700">
+                  You have {stats.accepted + stats.modified} accepted/modified suggestions ready to apply
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <ApplyCorrectionsButton
+                  datasetId={selectedDatasetId}
+                  iteration={1}
+                  onSuccess={() => {
+                    refetchSuggestions();
+                    refetchStats();
+                  }}
+                />
+                <RetrainButton
+                  datasetId={selectedDatasetId}
+                  iteration={1}
+                  onSuccess={() => {
+                    // Optionally refresh data
+                  }}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Configuration */}
       <Card>

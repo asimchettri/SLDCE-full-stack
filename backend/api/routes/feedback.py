@@ -99,7 +99,8 @@ async def get_feedback_stats(
     - Accept/Reject/Modify counts
     - Acceptance rate
     """
-    stats = FeedbackService.get_feedback_stats(db, dataset_id)
+    stats = FeedbackService.get_stats(db, dataset_id)
+
     return stats
 
 
@@ -120,7 +121,7 @@ async def analyze_feedback_patterns(
     - Confidence threshold patterns
     - Human agreement with model predictions
     """
-    patterns = FeedbackService.analyze_feedback_patterns(db, dataset_id, iteration)
+    patterns = FeedbackService.get_patterns(db, dataset_id, iteration)
     return patterns
 
 

@@ -1,6 +1,7 @@
 /**
  * Feedback-related TypeScript types
  * CRITICAL: Feedback data feeds Phase 2 memory/learning system
+ * FIXED: Aligned with backend FeedbackStatsResponse schema
  */
 
 export interface Feedback {
@@ -26,12 +27,13 @@ export interface FeedbackWithDetails extends Feedback {
   };
 }
 
+
 export interface FeedbackStats {
   dataset_id: number;
   total_feedback: number;
-  accept_count: number;
-  reject_count: number;
-  modify_count: number;
+  accepted: number;     
+  rejected: number;     
+  modified: number;     
   acceptance_rate: number;
   avg_review_time?: number;
 }

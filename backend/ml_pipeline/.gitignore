@@ -1,0 +1,15 @@
+﻿# Python cache
+__pycache__/
+.ipynb_checkpoints/
+
+# Virtual environments
+final_year_env/
+venv/
+
+# Environment files
+.env
+
+
+# OS files
+Thumbs.db
+.DS_Store

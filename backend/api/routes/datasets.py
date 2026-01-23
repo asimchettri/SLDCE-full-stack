@@ -31,17 +31,39 @@ async def upload_dataset(
     file: UploadFile = File(...),
     name: str = Form(...),
     description: Optional[str] = Form(None),
+    label_column: Optional[str] = Form(None),  
     db: Session = Depends(get_db)
 ):
     """
     Upload a CSV dataset
     
+    UPDATED: Now supports automatic label column detection and manual specification
+    
     Expected CSV format:
     - Headers in first row
-    - Features in all columns except last
-    - Labels in last column
+    - One column contains labels (will be auto-detected or can be specified)
+    - All other columns are features
+    
+    Label Column Detection:
+    - If label_column='auto' or None: Auto-detects 'class', 'label', 'target', or uses last column
+    - If label_column='last': Uses last column
+    - If label_column='first': Uses first column  
+    - If label_column='column_name': Uses specified column name
+    
+    Args:
+        file: CSV file to upload
+        name: Dataset name (required)
+        description: Dataset description (optional)
+        label_column: Label column specification (optional, defaults to auto-detection)
     """
-    dataset = await DatasetService.upload_csv_dataset(db, file, name, description)
+    # MODIFIED: Pass label_column parameter to service
+    dataset = await DatasetService.upload_csv_dataset(
+        db, 
+        file, 
+        name, 
+        description,
+        label_column=label_column  # ADDED
+    )
     return dataset
 
 

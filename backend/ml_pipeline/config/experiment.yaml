@@ -1,0 +1,33 @@
+dataset:
+  name: adult
+  path: data/raw/adult.xls
+  file_type: xls
+
+target:
+  column: income
+  positive_class: ">50K"
+
+features:
+  drop_columns: [fnlwgt]
+  scaling: standard
+
+missing_values:
+  placeholder: "?"
+  strategy:
+    categorical: most_frequent
+    numerical: median
+
+model:
+  type: random_forest      # logistic / decision_tree / random_forest
+  params:
+    n_estimators: 200
+    random_state: 42
+
+confidence_signal:
+  threshold: 0.6
+
+anomaly_signal:
+  contamination: 0.1
+
+decision:
+  reject_threshold: 0.7

@@ -7,6 +7,10 @@ class DatasetCreate(BaseModel):
     """Schema for creating a new dataset"""
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
+    label_column: Optional[str] = Field( 
+        default=None,
+        description="Name of the label column. Use 'auto' for auto-detection, 'last' for last column, or specify column name"
+    )
 
 
 class DatasetResponse(BaseModel):

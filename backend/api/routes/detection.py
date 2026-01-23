@@ -10,7 +10,9 @@ from schemas.detection import (
     DetectionStatsResponse,
     SignalStatsResponse
 )
+
 from services.detection_service import DetectionService
+from services.suggestion_service import SuggestionService
 
 router = APIRouter()
 
@@ -43,7 +45,7 @@ async def generate_suggestions(
     db: Session = Depends(get_db)
 ):
     """Generate correction suggestions for detected samples"""
-    result = DetectionService.generate_suggestions(db, dataset_id, iteration)
+    result = SuggestionService.generate_suggestions(db, dataset_id, iteration)
     return result
 
 

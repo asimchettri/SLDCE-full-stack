@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from core.database import engine, Base
-from api.routes import datasets, samples , models , experiments , detection , suggestions ,feedback
+from api.routes import datasets, samples , models , experiments , detection , suggestions ,feedback , corrections , retrain
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -67,6 +67,19 @@ app.include_router(
     feedback.router,
     prefix=f"{settings.API_V1_PREFIX}/feedback",
     tags=["feedback"]
+)
+
+app.include_router(
+    corrections.router,
+    prefix=f"{settings.API_V1_PREFIX}/corrections",
+    tags=["corrections"]
+)
+
+
+app.include_router(
+    retrain.router,
+    prefix=f"{settings.API_V1_PREFIX}/retrain",
+    tags=["retrain"]
 )
 
 
