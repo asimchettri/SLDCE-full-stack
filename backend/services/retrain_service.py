@@ -88,7 +88,7 @@ class RetrainService:
         # Train new model on corrected data
         logger.info(f"Training {model_name} on corrected dataset...")
         
-        from model_trainer import get_model
+        from ml_pipeline.src.data.model_trainer import get_model
         retrained_model = get_model(model_name, model_params)
         
         # Time the training
@@ -117,7 +117,24 @@ class RetrainService:
         ).first()
         
         # Calculate improvement
-        baseline_accuracy = baseline_model.test_accuracy or baseline_model.train_accuracy or 0.0
+        if baseline_model:
+            # Try test_accuracy first, then train_accuracy, then calculate it
+            if baseline_model.test_accuracy and baseline_model.test_accuracy > 0:
+                baseline_accuracy = baseline_model.test_accuracy
+            elif baseline_model.train_accuracy and baseline_model.train_accuracy > 0:
+                baseline_accuracy = baseline_model.train_accuracy
+            else:
+                # Baseline exists but no metrics - this shouldn't happen
+                logger.warning("Baseline model has no stored metrics!")
+                baseline_accuracy = 0.0
+        else:
+            logger.warning("No baseline model found!")
+            baseline_accuracy = 0.0
+
+    # Also get baseline's other metrics for comparison
+        baseline_precision = baseline_model.precision if baseline_model else 0.0
+        baseline_recall = baseline_model.recall if baseline_model else 0.0
+        baseline_f1 = baseline_model.f1_score if baseline_model else 0.0
         improvement = metrics['accuracy'] - baseline_accuracy
         improvement_pct = (improvement / baseline_accuracy * 100) if baseline_accuracy > 0 else 0
         
@@ -186,6 +203,9 @@ class RetrainService:
             "retrained_model_id": retrained_model_db.id,
             "baseline_metrics": {
                 "accuracy": baseline_accuracy,
+                "precision": baseline_precision,  
+                "recall": baseline_recall,        
+                "f1_score": baseline_f1,          
                 "test_accuracy": baseline_model.test_accuracy if baseline_model else None
             },
             "retrained_metrics": {

@@ -31,14 +31,30 @@ export interface ModelIteration {
   created_at: string;
 }
 
-export interface ModelComparison {
+
+export interface ModelComparisonItem {
   model_id: number;
   name: string;
   model_type: string;
+  is_baseline: boolean;
   accuracy: number;
   precision: number | null;
   recall: number | null;
   f1_score: number | null;
   training_time: number | null;
-  is_baseline: boolean;
+  samples_trained: number | null;
+  iteration_number: number | null;
+  samples_corrected: number | null;
+  noise_reduced: number | null;
+  created_at: string | null;
+}
+
+export interface ModelComparisonResponse {
+  dataset_id: number;
+  total_models: number;
+  models: ModelComparisonItem[];
+  overall_improvement: {
+    absolute: number;
+    percentage: number;
+  } | null;
 }

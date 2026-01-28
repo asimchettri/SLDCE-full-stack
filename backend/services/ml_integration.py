@@ -23,16 +23,31 @@ sys.path.insert(0, str(ML_PIPELINE_PATH / "src" / "data"))
 
 # Import Dev 1's modules
 try:
-    from model_trainer import get_model
-    from detectors import (
+    from src.data.model_trainer import get_model
+    from src.data.detectors import (
         detect_confidence_issues,
         detect_anomalies,
         combine_signals,
         generate_suggestions
     )
 except ImportError as e:
-    logger.error(f"Failed to import ML modules: {e}")
-    raise
+    try:
+        from data.model_trainer import get_model
+        from data.detectors import (
+            detect_confidence_issues,
+            detect_anomalies,
+            combine_signals,
+            generate_suggestions
+        )
+    except ImportError as e:
+        logger.error(f"Failed to import ML modules: {e}")
+        logger.error(f"ML_PIPELINE_PATH: {ML_PIPELINE_PATH}")
+        logger.error(f"Python path: {sys.path}")
+        raise ImportError(
+            "Could not import ML pipeline modules. "
+            "Ensure ml_pipeline/src/data/model_trainer.py and detectors.py exist."
+        )
+    
 
 
 class MLIntegration:

@@ -189,6 +189,7 @@ class FeedbackService:
         acceptance_by_confidence = {}
         acceptance_by_priority = {}
         
+        
         for feedback, detection, suggestion in results:
             # Group by confidence ranges
             conf_range = f"{int(detection.confidence_score * 10) * 10}%"

@@ -21,7 +21,7 @@ export function FeedbackStatsDashboard({ stats }: FeedbackStatsDashboardProps) {
   };
 
   // Calculate positive rate (accept + modify)
-  const positiveCount = stats.accept_count + stats.modify_count;
+  const positiveCount = stats.accepted + stats.modified;
   const positiveRate = stats.total_feedback > 0 
     ? ((positiveCount / stats.total_feedback) * 100).toFixed(1)
     : 0;
@@ -63,10 +63,10 @@ export function FeedbackStatsDashboard({ stats }: FeedbackStatsDashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600">
-              {stats.accept_count}
+              {stats.accepted}
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              {getPercentage(stats.accept_count)}% of total
+              {getPercentage(stats.accepted)}% of total
             </p>
           </CardContent>
         </Card>
@@ -81,10 +81,10 @@ export function FeedbackStatsDashboard({ stats }: FeedbackStatsDashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-red-600">
-              {stats.reject_count}
+              {stats. rejected}
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              {getPercentage(stats.reject_count)}% of total
+              {getPercentage(stats. rejected)}% of total
             </p>
           </CardContent>
         </Card>
@@ -99,10 +99,10 @@ export function FeedbackStatsDashboard({ stats }: FeedbackStatsDashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-blue-600">
-              {stats.modify_count}
+              {stats.modified}
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              {getPercentage(stats.modify_count)}% of total
+              {getPercentage(stats.modified)}% of total
             </p>
           </CardContent>
         </Card>
@@ -159,13 +159,13 @@ export function FeedbackStatsDashboard({ stats }: FeedbackStatsDashboardProps) {
                   Accepted
                 </span>
                 <span className="font-semibold text-green-600">
-                  {stats.accept_count} ({getPercentage(stats.accept_count)}%)
+                  {stats.accepted} ({getPercentage(stats.accepted)}%)
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-green-500 h-2 rounded-full transition-all"
-                  style={{ width: `${getPercentage(stats.accept_count)}%` }}
+                  style={{ width: `${getPercentage(stats.accepted)}%` }}
                 />
               </div>
             </div>
@@ -178,13 +178,13 @@ export function FeedbackStatsDashboard({ stats }: FeedbackStatsDashboardProps) {
                   Rejected
                 </span>
                 <span className="font-semibold text-red-600">
-                  {stats.reject_count} ({getPercentage(stats.reject_count)}%)
+                  {stats. rejected} ({getPercentage(stats. rejected)}%)
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-red-500 h-2 rounded-full transition-all"
-                  style={{ width: `${getPercentage(stats.reject_count)}%` }}
+                  style={{ width: `${getPercentage(stats. rejected)}%` }}
                 />
               </div>
             </div>
@@ -197,13 +197,13 @@ export function FeedbackStatsDashboard({ stats }: FeedbackStatsDashboardProps) {
                   Modified
                 </span>
                 <span className="font-semibold text-blue-600">
-                  {stats.modify_count} ({getPercentage(stats.modify_count)}%)
+                  {stats.modified} ({getPercentage(stats.modified)}%)
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-blue-500 h-2 rounded-full transition-all"
-                  style={{ width: `${getPercentage(stats.modify_count)}%` }}
+                  style={{ width: `${getPercentage(stats.modified)}%` }}
                 />
               </div>
             </div>

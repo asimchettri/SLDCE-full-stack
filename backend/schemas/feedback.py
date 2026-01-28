@@ -3,7 +3,7 @@ Feedback schemas for API request/response validation
 """
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict , Any
 
 
 class FeedbackBase(BaseModel):
@@ -64,11 +64,12 @@ class FeedbackStatsResponse(BaseModel):
 class FeedbackPatternResponse(BaseModel):
     """Pattern analysis from feedback"""
     dataset_id: int
-    iteration: int
-    most_accepted_class: Optional[int] = None
-    most_rejected_class: Optional[int] = None
-    high_confidence_acceptance_rate: float
-    low_confidence_acceptance_rate: float
+    iteration: Optional[int] = None
+    patterns_found: int
+    acceptance_by_confidence: Optional[Dict[str, Dict[str, Any]]] = None
+    acceptance_by_priority: Optional[Dict[str, Dict[str, Any]]] = None
+    insights: Optional[List[str]] = None
+    message: Optional[str] = None  # For when no patterns found
     
     model_config = ConfigDict(protected_namespaces=())
 

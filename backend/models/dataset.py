@@ -17,6 +17,9 @@ class Dataset(Base):
     num_features = Column(Integer, nullable=False)
     num_classes = Column(Integer, nullable=False)
     
+    feature_names = Column(Text, nullable=True)  # JSON string of feature column names
+    label_column_name = Column(String(255), nullable=True)
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

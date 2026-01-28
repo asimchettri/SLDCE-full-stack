@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field, ConfigDict
-from datetime import datetime
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Optional, Dict, Any
+from datetime import datetime
+import json
 
 
 class MLModelCreate(BaseModel):
@@ -32,6 +33,16 @@ class MLModelResponse(BaseModel):
     is_active: bool
     is_baseline: bool
     created_at: datetime
+
+    @field_validator('hyperparameters', mode='before')
+    @classmethod
+    def parse_hyperparameters(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return None
+        return v
     
     model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
@@ -66,3 +77,6 @@ class ModelComparisonResponse(BaseModel):
     is_baseline: bool
     
     model_config = ConfigDict(protected_namespaces=())
+
+
+    

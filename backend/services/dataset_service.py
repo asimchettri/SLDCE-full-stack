@@ -162,13 +162,16 @@ class DatasetService:
             )
         
         # Check if dataset name already exists
-        existing = db.query(Dataset).filter(Dataset.name == name).first()
+        existing = db.query(Dataset).filter(
+            Dataset.name == name,
+            Dataset.is_active == True  
+        ).first()
         if existing:
             raise HTTPException(
                 status_code=400,
                 detail=f"Dataset with name '{name}' already exists"
             )
-        
+            
         try:
             # Read CSV file
             contents = await file.read()
@@ -217,7 +220,9 @@ class DatasetService:
                 file_path=file_path,
                 num_samples=num_samples,
                 num_features=num_features,
-                num_classes=num_classes
+                num_classes=num_classes,
+                feature_names=json.dumps(feature_columns),
+                label_column_name=label_column_name 
             )
             
             db.add(dataset)

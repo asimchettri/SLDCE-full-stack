@@ -3,8 +3,10 @@ Correction API routes
 Apply corrections from feedback and export cleaned datasets
 """
 from fastapi import APIRouter, Depends, Path, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from core.database import get_db
+import os
 from services.correction_service import CorrectionService
 from schemas.correction import (
     CorrectionApplyResponse,
@@ -160,3 +162,30 @@ async def get_correction_summary(
     """
     summary = CorrectionService.get_correction_summary(db, dataset_id)
     return summary
+
+
+@router.get("/download/{dataset_id}")
+async def download_cleaned_dataset(
+    dataset_id: int = Path(..., description="Dataset ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    Download cleaned dataset as CSV
+    
+    Returns the CSV file directly for download
+    """
+    from fastapi.responses import FileResponse
+    import tempfile
+    
+    # Export to temp file
+    result = CorrectionService.export_cleaned_dataset(db, dataset_id, tempfile.gettempdir())
+    
+    # Return as downloadable file
+    return FileResponse(
+        path=result['file_path'],
+        filename=os.path.basename(result['file_path']),
+        media_type='text/csv',
+        headers={
+            "Content-Disposition": f"attachment; filename={os.path.basename(result['file_path'])}"
+        }
+    )

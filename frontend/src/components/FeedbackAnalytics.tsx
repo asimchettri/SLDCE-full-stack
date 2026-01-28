@@ -3,7 +3,6 @@ import { feedbackAPI } from '@/services/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { TrendingUp, Brain, CheckCircle, XCircle, Edit } from 'lucide-react';
 
-
 interface FeedbackAnalyticsProps {
   datasetId: number;
   iteration?: number;
@@ -59,9 +58,11 @@ export function FeedbackAnalytics({ datasetId, iteration = 1 }: FeedbackAnalytic
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.accept_count}</div>
+            <div className="text-2xl font-bold text-green-600">{stats.accepted}</div>
             <p className="text-xs text-gray-500">
-              {((stats.accept_count / stats.total_feedback) * 100).toFixed(1)}%
+              {stats.total_feedback > 0
+                ? ((stats.accepted / stats.total_feedback) * 100).toFixed(1)
+                : '0.0'}%
             </p>
           </CardContent>
         </Card>
@@ -75,9 +76,11 @@ export function FeedbackAnalytics({ datasetId, iteration = 1 }: FeedbackAnalytic
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.reject_count}</div>
+            <div className="text-2xl font-bold text-red-600">{stats.rejected}</div>
             <p className="text-xs text-gray-500">
-              {((stats.reject_count / stats.total_feedback) * 100).toFixed(1)}%
+              {stats.total_feedback > 0
+                ? ((stats.rejected / stats.total_feedback) * 100).toFixed(1)
+                : '0.0'}%
             </p>
           </CardContent>
         </Card>
@@ -91,16 +94,18 @@ export function FeedbackAnalytics({ datasetId, iteration = 1 }: FeedbackAnalytic
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.modify_count}</div>
+            <div className="text-2xl font-bold text-blue-600">{stats.modified}</div>
             <p className="text-xs text-gray-500">
-              {((stats.modify_count / stats.total_feedback) * 100).toFixed(1)}%
+              {stats.total_feedback > 0
+                ? ((stats.modified / stats.total_feedback) * 100).toFixed(1)
+                : '0.0'}%
             </p>
           </CardContent>
         </Card>
       </div>
 
       {/* Patterns Analysis */}
-      {patterns && (
+      {patterns && patterns.patterns_found > 0 && (
         <Card className="bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -111,62 +116,118 @@ export function FeedbackAnalytics({ datasetId, iteration = 1 }: FeedbackAnalytic
               Pattern analysis for Phase 2 memory system
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              {/* Confidence Patterns */}
-              <div className="bg-white p-3 rounded-lg border">
-                <div className="text-xs font-semibold text-gray-600 mb-2">
-                  High Confidence (≥80%)
-                </div>
-                <div className="text-2xl font-bold text-green-600">
-                  {patterns.high_confidence_acceptance_rate.toFixed(1)}%
-                </div>
-                <p className="text-xs text-gray-500">Acceptance Rate</p>
-              </div>
-
-              <div className="bg-white p-3 rounded-lg border">
-                <div className="text-xs font-semibold text-gray-600 mb-2">
-                  Low Confidence (&lt;80%)
-                </div>
-                <div className="text-2xl font-bold text-orange-600">
-                  {patterns.low_confidence_acceptance_rate.toFixed(1)}%
-                </div>
-                <p className="text-xs text-gray-500">Acceptance Rate</p>
-              </div>
-            </div>
-
-            {/* Class Patterns */}
-            {(patterns.most_accepted_class !== null || patterns.most_rejected_class !== null) && (
-              <div className="grid grid-cols-2 gap-4 pt-3 border-t">
-                {patterns.most_accepted_class !== null && (
-                  <div className="text-center">
-                    <div className="text-xs text-gray-600 mb-1">Most Accepted</div>
-                    <div className="text-xl font-bold text-green-600">
-                      Class {patterns.most_accepted_class}
-                    </div>
+          <CardContent className="space-y-4">
+            {/* Confidence Patterns */}
+            {patterns.acceptance_by_confidence &&
+              Object.keys(patterns.acceptance_by_confidence).length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold text-gray-700 mb-3">
+                    Acceptance Rate by Confidence Level
                   </div>
-                )}
-                {patterns.most_rejected_class !== null && (
-                  <div className="text-center">
-                    <div className="text-xs text-gray-600 mb-1">Most Rejected</div>
-                    <div className="text-xl font-bold text-red-600">
-                      Class {patterns.most_rejected_class}
-                    </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {Object.entries(patterns.acceptance_by_confidence)
+                      .sort(([a], [b]) => parseInt(b) - parseInt(a)) // Sort descending
+                      .map(([range, data]) => (
+                        <div key={range} className="bg-white p-3 rounded-lg border shadow-sm">
+                          <div className="text-xs font-medium text-gray-600 mb-1">
+                            Confidence {range}
+                          </div>
+                          <div className="text-2xl font-bold text-green-600">
+                            {data.acceptance_rate.toFixed(1)}%
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {data.accepted}/{data.total} accepted
+                          </p>
+                        </div>
+                      ))}
                   </div>
-                )}
+                </div>
+              )}
+
+            {/* Priority Patterns */}
+            {patterns.acceptance_by_priority &&
+              Object.keys(patterns.acceptance_by_priority).length > 0 && (
+                <div className="pt-3 border-t">
+                  <div className="text-xs font-semibold text-gray-700 mb-3">
+                    Acceptance Rate by Priority Level
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {['high', 'medium', 'low']
+                      .filter((priority) => patterns.acceptance_by_priority![priority])
+                      .map((priority) => {
+                        const data = patterns.acceptance_by_priority![priority];
+                        return (
+                          <div
+                            key={priority}
+                            className="bg-white p-3 rounded-lg border shadow-sm"
+                          >
+                            <div className="text-xs font-medium text-gray-600 mb-1 capitalize">
+                              {priority} Priority
+                            </div>
+                            <div
+                              className={`text-2xl font-bold ${
+                                priority === 'high'
+                                  ? 'text-red-600'
+                                  : priority === 'medium'
+                                  ? 'text-orange-600'
+                                  : 'text-yellow-600'
+                              }`}
+                            >
+                              {data.acceptance_rate.toFixed(1)}%
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {data.accepted}/{data.total} accepted
+                            </p>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+            {/* Insights from Backend */}
+            {patterns.insights && patterns.insights.length > 0 && (
+              <div className="pt-3 border-t">
+                <div className="text-xs font-semibold text-gray-700 mb-2">
+                  Key Learning Insights
+                </div>
+                <ul className="space-y-2">
+                  {patterns.insights.map((insight, idx) => (
+                    <li
+                      key={idx}
+                      className="text-sm text-purple-700 flex items-start gap-2 bg-white p-2 rounded border border-purple-100"
+                    >
+                      <TrendingUp className="h-4 w-4 mt-0.5 flex-shrink-0 text-purple-600" />
+                      <span>{insight}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 
-            {/* Learning Note */}
-            <div className="pt-3 border-t">
+            {/* Learning Summary */}
+            <div className="pt-3 border-t bg-white p-3 rounded-lg">
               <p className="text-xs text-purple-700">
-                <TrendingUp className="inline h-3 w-3 mr-1" />
-                <strong>Phase 2 Insight:</strong> System learns optimal thresholds from these patterns.
-                {patterns.high_confidence_acceptance_rate > patterns.low_confidence_acceptance_rate + 20 && (
-                  <span className="ml-1">
-                    High confidence suggestions are significantly more reliable ({patterns.high_confidence_acceptance_rate.toFixed(0)}% vs {patterns.low_confidence_acceptance_rate.toFixed(0)}%).
-                  </span>
-                )}
+                <Brain className="inline h-4 w-4 mr-1" />
+                <strong>Phase 2 Memory:</strong> System has learned from{' '}
+                <span className="font-semibold">{patterns.patterns_found}</span> feedback
+                samples. These patterns will be used to improve detection accuracy in future
+                iterations.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* No Patterns Message */}
+      {patterns && patterns.patterns_found === 0 && (
+        <Card className="border-dashed border-2">
+          <CardContent className="pt-6 pb-6">
+            <div className="text-center">
+              <Brain className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+              <p className="text-sm text-gray-600 font-medium">No Learning Patterns Yet</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Review some suggestions to generate insights for the memory system
               </p>
             </div>
           </CardContent>
@@ -178,7 +239,9 @@ export function FeedbackAnalytics({ datasetId, iteration = 1 }: FeedbackAnalytic
         <CardContent className="pt-6">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-semibold text-gray-700">Overall Acceptance Rate</div>
+              <div className="text-sm font-semibold text-gray-700">
+                Overall Acceptance Rate
+              </div>
               <div className="text-xs text-gray-600 mt-1">
                 (Accepted + Modified) / Total Reviews
               </div>
@@ -190,7 +253,7 @@ export function FeedbackAnalytics({ datasetId, iteration = 1 }: FeedbackAnalytic
           <div className="mt-3 w-full bg-gray-200 rounded-full h-2">
             <div
               className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full transition-all"
-              style={{ width: `${stats.acceptance_rate}%` }}
+              style={{ width: `${Math.min(stats.acceptance_rate, 100)}%` }}
             />
           </div>
         </CardContent>

@@ -38,13 +38,23 @@ export interface FeedbackStats {
   avg_review_time?: number;
 }
 
+export interface PatternRangeData {
+  total: number;
+  accepted:number;
+  acceptance_rate: number;
+}
 export interface FeedbackPatterns {
   dataset_id: number;
-  iteration: number;
-  most_accepted_class?: number;
-  most_rejected_class?: number;
-  high_confidence_acceptance_rate: number;
-  low_confidence_acceptance_rate: number;
+  iteration?: number;
+  patterns_found: number;
+  acceptance_by_confidence?: {
+    [range: string]: PatternRangeData; 
+  };
+  acceptance_by_priority?: {
+    [priority: string]: PatternRangeData; 
+  };
+  insights?: string[];
+  message?: string; 
 }
 
 export interface FeedbackListResponse {

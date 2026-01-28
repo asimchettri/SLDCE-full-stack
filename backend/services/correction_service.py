@@ -123,17 +123,7 @@ class CorrectionService:
     ) -> Dict[str, Any]:
         """
         Export cleaned dataset to CSV file
-        
-        Creates a CSV with corrected labels based on applied feedback.
-        Follows the pattern from Dev 1's apply_corrections notebook.
-        
-        Args:
-            db: Database session
-            dataset_id: Dataset to export
-            output_dir: Directory to save cleaned dataset
-            
-        Returns:
-            Export statistics and file path
+        UPDATED: Preserves original column names from upload
         """
         from models.dataset import Dataset
         
@@ -144,13 +134,22 @@ class CorrectionService:
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
         
-        # Get all samples
+        # Get all samples ordered by original index
         samples = db.query(Sample).filter(
             Sample.dataset_id == dataset_id
         ).order_by(Sample.sample_index).all()
         
         if not samples:
             raise HTTPException(status_code=404, detail="No samples found in dataset")
+    
+    # Get original column names
+        try:
+            feature_names = json.loads(dataset.feature_names) if dataset.feature_names else None
+            label_column_name = dataset.label_column_name or 'label'
+        except (json.JSONDecodeError, TypeError):
+            logger.warning("Could not parse feature names, using generic names")
+            feature_names = None
+            label_column_name = 'label'
         
         # Convert to DataFrame
         records = []
@@ -161,20 +160,31 @@ class CorrectionService:
             # Create record with features + label
             record = {}
             
-            # Add features (assuming they're a list)
+            # Add features with original names if available
             if isinstance(features, list):
-                for i, feature_value in enumerate(features):
-                    record[f'feature_{i}'] = feature_value
+                if feature_names and len(feature_names) == len(features):
+                    # Use original column names
+                    for col_name, feature_value in zip(feature_names, features):
+                        record[col_name] = feature_value
+                else:
+                    # Fallback to generic names
+                    for i, feature_value in enumerate(features):
+                        record[f'feature_{i}'] = feature_value
             elif isinstance(features, dict):
                 record.update(features)
             
-            # Add label (use current_label which has corrections applied)
-            record['label'] = sample.current_label
+            # Add label with original column name
+            record[label_column_name] = sample.current_label
             
             records.append(record)
-        
+    
         # Create DataFrame
         df = pd.DataFrame(records)
+        
+        # Reorder columns: features first, then label (matching original order)
+        if feature_names:
+            columns_order = feature_names + [label_column_name]
+            df = df[columns_order]
         
         # Create output directory
         os.makedirs(output_dir, exist_ok=True)
@@ -198,6 +208,7 @@ class CorrectionService:
         logger.info(f"   - Total samples: {len(samples)}")
         logger.info(f"   - Corrected samples: {corrected_samples}")
         logger.info(f"   - Labels changed: {labels_changed}")
+        logger.info(f"   - Column names preserved: {feature_names is not None}")
         
         return {
             "dataset_id": dataset_id,

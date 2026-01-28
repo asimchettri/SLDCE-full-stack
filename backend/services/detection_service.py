@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 from models.dataset import Sample, Detection
 from models.model import MLModel 
 from fastapi import HTTPException
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import json
 from datetime import datetime
 import logging
+import numpy as np  
 
 from services.ml_integration import get_ml_integration
 
@@ -147,6 +148,35 @@ class DetectionService:
                     priority_weights=priority_weights,
                     confidence_threshold=confidence_threshold
                 )
+
+                from sklearn.model_selection import train_test_split
+
+                # Convert samples to arrays for baseline evaluation
+                X_all, y_all = DetectionService._samples_to_arrays(samples)
+
+                # Split for baseline evaluation (same random state as retrain for consistency)
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X_all, y_all, test_size=0.2, random_state=42,
+                    stratify=y_all if len(np.unique(y_all)) > 1 else None
+                )
+
+                # Evaluate baseline model on test set
+                y_pred_test = ml.model.predict(X_test)
+                baseline_metrics = ml.evaluate_model(X_test, y_test, y_pred_test)
+
+                # Update model with baseline metrics
+                db_model.test_accuracy = baseline_metrics['accuracy']
+                db_model.precision = baseline_metrics['precision']
+                db_model.recall = baseline_metrics['recall']
+                db_model.f1_score = baseline_metrics['f1_score']
+                db_model.num_samples_trained = len(X_train)
+                db.commit()
+
+                logger.info(f"📊 Baseline Metrics Stored:")
+                logger.info(f"   Test Accuracy: {baseline_metrics['accuracy']:.4f}")
+                logger.info(f"   Precision: {baseline_metrics['precision']:.4f}")
+                logger.info(f"   Recall: {baseline_metrics['recall']:.4f}")
+                logger.info(f"   F1-Score: {baseline_metrics['f1_score']:.4f}")
                 
                 #  Extract metrics from ML pipeline for model update
                 if ml_results and len(ml_results) > 0:
@@ -460,3 +490,19 @@ class DetectionService:
             "signal_breakdown": signal_breakdown,
             "priority_weights": priority_weights
         }
+    
+
+    @staticmethod
+    def _samples_to_arrays(samples: List[Any]) -> Tuple[np.ndarray, np.ndarray]:
+        """Convert Sample objects to numpy arrays"""
+        import json
+        
+        features = []
+        labels = []
+        
+        for sample in samples:
+            feat = json.loads(sample.features)
+            features.append(feat)
+            labels.append(sample.current_label)
+        
+        return np.array(features), np.array(labels)

@@ -1,6 +1,6 @@
 import axios from "axios";
 import type { Dataset, DatasetStats } from "../types/dataset";
-import type { MLModel, ModelIteration, ModelComparison } from "../types/model";
+import type { MLModel, ModelIteration, ModelComparisonItem } from "../types/model";
 import type {
   Experiment,
   ExperimentIteration,
@@ -130,7 +130,7 @@ export const modelAPI = {
   },
 
   // Compare models for a dataset
-  compare: async (datasetId: number): Promise<ModelComparison[]> => {
+  compare: async (datasetId: number): Promise<ModelComparisonItem[]> => {
     const response = await api.get(
       `/api/v1/models/dataset/${datasetId}/compare`
     );
@@ -404,6 +404,13 @@ export const retrainAPI = {
   // Compare models
   compare: async (datasetId: number): Promise<any> => {
     const response = await api.get(`/api/v1/retrain/compare/${datasetId}`);
+    return response.data;
+  },
+
+  download: async (datasetId: number): Promise<Blob> => {
+    const response = await api.get(`/api/v1/corrections/download/${datasetId}`, {
+      responseType: 'blob'
+    });
     return response.data;
   },
 };
