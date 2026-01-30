@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { Brain } from 'lucide-react'; 
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { datasetAPI } from '@/services/api';
+import { baselineAPI, datasetAPI } from '@/services/api';
 import type { Dataset } from '@/types/dataset';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Eye, Trash2, AlertCircle, TrendingUp, Database as DatabaseIcon } from 'lucide-react';
+import {  Trash2, AlertCircle, TrendingUp, Database as DatabaseIcon } from 'lucide-react';
+import { TrainBaselineDialog } from './TrainBaselineDialog'; 
+
 import {
   Dialog,
   DialogContent,
@@ -19,6 +22,7 @@ interface DatasetCardProps {
 }
 
 export function DatasetCard({ dataset }: DatasetCardProps) {
+  const [trainBaselineOpen, setTrainBaselineOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [statsDialogOpen, setStatsDialogOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -27,7 +31,7 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dataset-stats', dataset.id],
     queryFn: () => datasetAPI.getStats(dataset.id),
-    enabled: statsDialogOpen, // Only fetch when dialog is open
+    enabled: statsDialogOpen,
   });
 
   // Delete mutation
@@ -37,6 +41,12 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
       queryClient.invalidateQueries({ queryKey: ['datasets'] });
       setDeleteDialogOpen(false);
     },
+  });
+
+  // Check if baseline exists
+  const { data: baselineCheck } = useQuery({
+    queryKey: ['baseline-check', dataset.id],
+    queryFn: () => baselineAPI.checkExists(dataset.id),
   });
 
   const formatDate = (dateString: string) => {
@@ -90,6 +100,43 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
               Uploaded {formatDate(dataset.created_at)}
             </div>
 
+            {/* ========== ADD THIS SECTION ========== */}
+            {/* Baseline Training Status */}
+            {!baselineCheck?.exists ? (
+              <div className="pt-2 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTrainBaselineOpen(true)}
+                  className="w-full"
+                >
+                  <Brain className="mr-2 h-4 w-4" />
+                  Train Baseline Model
+                </Button>
+                <p className="text-xs text-gray-500 text-center mt-1">
+                  Train on clean data first
+                </p>
+              </div>
+            ) : (
+              <div className="pt-2 border-t">
+                <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                  <div className="flex items-start gap-2">
+                    <Brain className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-green-800">
+                        Baseline Trained
+                      </div>
+                      <div className="text-xs text-green-600 mt-0.5 truncate">
+                        {baselineCheck.model_type.replace('_', ' ')} • 
+                        {' '}{(baselineCheck.test_accuracy * 100).toFixed(1)}% accuracy
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* ========== END NEW SECTION ========== */}
+
             {/* Action Buttons */}
             <div className="flex gap-2 pt-2">
               <Button
@@ -113,6 +160,21 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* ========== ADD THIS DIALOG ========== */}
+      {/* Train Baseline Dialog */}
+      <TrainBaselineDialog
+        open={trainBaselineOpen}
+        onOpenChange={setTrainBaselineOpen}
+        datasetId={dataset.id}
+        datasetName={dataset.name}
+        onSuccess={() => {
+          // Refetch baseline check to update UI
+          queryClient.invalidateQueries({ queryKey: ['baseline-check', dataset.id] });
+          queryClient.invalidateQueries({ queryKey: ['models'] });
+        }}
+      />
+      {/* ========== END NEW DIALOG ========== */}
 
       {/* Statistics Dialog */}
       <Dialog open={statsDialogOpen} onOpenChange={setStatsDialogOpen}>

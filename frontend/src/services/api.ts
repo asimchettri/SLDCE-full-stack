@@ -414,3 +414,29 @@ export const retrainAPI = {
     return response.data;
   },
 };
+
+
+
+export const baselineAPI = {
+  // Train baseline model
+  train: async (
+    datasetId: number,
+    modelType: 'random_forest' | 'logistic' | 'svm' = 'random_forest',
+    testSize: number = 0.2,
+    hyperparameters?: Record<string, any>
+  ): Promise<any> => {
+    const response = await api.post('/api/v1/baseline/train', {
+      dataset_id: datasetId,
+      model_type: modelType,
+      test_size: testSize,
+      hyperparameters,
+    });
+    return response.data;
+  },
+
+  // Check if baseline exists
+  checkExists: async (datasetId: number): Promise<any> => {
+    const response = await api.get(`/api/v1/baseline/check/${datasetId}`);
+    return response.data;
+  },
+};
