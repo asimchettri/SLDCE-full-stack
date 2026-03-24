@@ -24,33 +24,9 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { ComparisonTable } from '@/components/ComparisonTable';
+import type { ModelComparisonItem, ModelComparisonResponse } from '../types/model';
 
-interface ModelComparisonItem {
-  model_id: number;
-  name: string;
-  model_type: string;
-  is_baseline: boolean;
-  accuracy: number;
-  precision: number | null;
-  recall: number | null;
-  f1_score: number | null;
-  training_time: number | null;
-  samples_trained: number | null;
-  iteration_number: number | null;
-  samples_corrected: number | null;
-  noise_reduced: number | null;
-  created_at: string | null;
-}
 
-interface ModelComparisonResponse {
-  dataset_id: number;
-  total_models: number;
-  models: ModelComparisonItem[];
-  overall_improvement: {
-    absolute: number;
-    percentage: number;
-  } | null;
-}
 
 interface CorrectionSummary {
   dataset_id: number;
@@ -91,18 +67,9 @@ export function EvaluationPage() {
     refetchComparison();
   };
 
-  const handleDownloadDataset = async () => {
+ const handleDownloadDataset = async () => {
     if (!selectedDatasetId) return;
-    
-    try {
-      // Download CSV
-      window.open(
-        `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api/v1/corrections/download/${selectedDatasetId}`,
-        '_blank'
-      );
-    } catch (error) {
-      console.error('Download failed:', error);
-    }
+    correctionsAPI.downloadCorrected(selectedDatasetId);
   };
 
   const handleExportReport = () => {

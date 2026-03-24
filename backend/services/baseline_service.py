@@ -10,9 +10,9 @@ from typing import Dict, Any, Tuple
 import numpy as np
 import json
 import logging
-from datetime import datetime
+from datetime import datetime,timezone
 
-from services.ml_integration import get_ml_integration
+
 
 logger = logging.getLogger(__name__)
 
@@ -88,33 +88,50 @@ class BaselineService:
         
         logger.info(f"Split: {len(X_train)} train, {len(X_test)} test")
         
-        # Get ML integration
-        ml = get_ml_integration()
-        
-        # Set hyperparameters
+       
         if hyperparameters is None:
             hyperparameters = BaselineService._get_default_hyperparameters(model_type)
-        
-        # Train model
-        logger.info(f"Training {model_type}...")
-        
-        from ml_pipeline.src.data.model_trainer import get_model
-        baseline_model = get_model(model_type, hyperparameters)
-        
-        # Time the training
+
+        # Train using sklearn directly — baseline uses a simple model
+        # before the engine takes over for iterative correction
         import time
+        from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.svm import SVC
+        from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
+        model_map = {
+            "random_forest": RandomForestClassifier,
+            "logistic": LogisticRegression,
+            "svm": SVC,
+        }
+
+        ModelClass = model_map.get(model_type)
+        if ModelClass is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported model type '{model_type}'. "
+                       f"Choose from: {list(model_map.keys())}"
+            )
+
+        logger.info(f"Training {model_type}...")
         start_time = time.time()
-        baseline_model.train(X_train, y_train)
+        clf = ModelClass(**hyperparameters)
+        clf.fit(X_train, y_train)
         training_time = time.time() - start_time
-        
         logger.info(f"✅ Training complete in {training_time:.2f}s")
-        
-        # Evaluate on both train and test sets
-        y_train_pred = baseline_model.predict(X_train)
-        y_test_pred = baseline_model.predict(X_test)
-        
-        train_metrics = ml.evaluate_model(X_train, y_train, y_train_pred)
-        test_metrics = ml.evaluate_model(X_test, y_test, y_test_pred)
+
+        def _eval(X, y_true):
+            y_pred = clf.predict(X)
+            return {
+                "accuracy": float(accuracy_score(y_true, y_pred)),
+                "precision": float(precision_score(y_true, y_pred, average="weighted", zero_division=0)),
+                "recall": float(recall_score(y_true, y_pred, average="weighted", zero_division=0)),
+                "f1_score": float(f1_score(y_true, y_pred, average="weighted", zero_division=0)),
+            }
+
+        train_metrics = _eval(X_train, y_train)
+        test_metrics = _eval(X_test, y_test)
         
         logger.info(f"📊 Train Metrics:")
         logger.info(f"   Accuracy: {train_metrics['accuracy']:.4f}")
@@ -173,20 +190,18 @@ class BaselineService:
                 "samples_tested": len(X_test),
                 "training_time_seconds": round(training_time, 2)
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     
     @staticmethod
     def _samples_to_arrays(samples: list) -> Tuple[np.ndarray, np.ndarray]:
-        """Convert samples to numpy arrays using current_label"""
+        """Convert samples to numpy arrays using original_label (clean baseline)"""
         features = []
         labels = []
-        
         for sample in samples:
             feat = json.loads(sample.features)
             features.append(feat)
-            labels.append(sample.current_label)  # Use current_label
-        
+            labels.append(sample.original_label)  # Baseline uses original (clean) labels
         return np.array(features), np.array(labels)
     
     @staticmethod
@@ -205,9 +220,10 @@ class BaselineService:
                 "n_jobs": -1
             },
             "svm": {
-                "kernel": "rbf",
-                "random_state": 42
-            }
+        "kernel": "rbf",
+        "random_state": 42,
+        "probability": True,   
+    }
         }
         
         return defaults.get(model_type, {})

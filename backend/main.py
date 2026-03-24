@@ -1,11 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
-from core.database import engine, Base
-from api.routes import datasets, samples , models , experiments , detection , suggestions ,feedback , corrections , retrain , baseline
+from api.routes import datasets, samples , models , experiments , detection , suggestions ,feedback , corrections , retrain , baseline , memory, benchmarks
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -15,6 +13,21 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+from fastapi.exceptions import ResponseValidationError
+from fastapi.responses import JSONResponse
+import traceback
+
+@app.exception_handler(ResponseValidationError)
+async def validation_exception_handler(request, exc):
+    print("=== RESPONSE VALIDATION ERROR ===")
+    print(traceback.format_exc())
+    print(str(exc))
+    print("=================================")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc.errors())}
+    )
 
 # Configure CORS
 app.add_middleware(
@@ -86,6 +99,18 @@ app.include_router(
     baseline.router,
     prefix=f"{settings.API_V1_PREFIX}/baseline",
     tags=["baseline"]
+)
+
+app.include_router(
+    memory.router,
+    prefix=f"{settings.API_V1_PREFIX}/memory",
+    tags=["memory"]
+)
+
+app.include_router(
+    benchmarks.router,
+    prefix=f"{settings.API_V1_PREFIX}/benchmarks",
+    tags=["benchmarks"]
 )
 
 

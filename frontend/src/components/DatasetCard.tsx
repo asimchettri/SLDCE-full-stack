@@ -1,12 +1,23 @@
-import { useState } from 'react';
-import { Brain } from 'lucide-react'; 
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { baselineAPI, datasetAPI } from '@/services/api';
-import type { Dataset } from '@/types/dataset';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import {  Trash2, AlertCircle, TrendingUp, Database as DatabaseIcon } from 'lucide-react';
-import { TrainBaselineDialog } from './TrainBaselineDialog'; 
+import { useState } from "react";
+import { Brain } from "lucide-react";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { baselineAPI, datasetAPI } from "@/services/api";
+import type { Dataset } from "@/types/dataset";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Trash2,
+  AlertCircle,
+  TrendingUp,
+  Database as DatabaseIcon,
+} from "lucide-react";
+import { TrainBaselineDialog } from "./TrainBaselineDialog";
 
 import {
   Dialog,
@@ -15,7 +26,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 
 interface DatasetCardProps {
   dataset: Dataset;
@@ -29,7 +40,7 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
 
   // Fetch dataset statistics
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['dataset-stats', dataset.id],
+    queryKey: ["dataset-stats", dataset.id],
     queryFn: () => datasetAPI.getStats(dataset.id),
     enabled: statsDialogOpen,
   });
@@ -38,22 +49,22 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
   const deleteMutation = useMutation({
     mutationFn: () => datasetAPI.delete(dataset.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['datasets'] });
+      queryClient.invalidateQueries({ queryKey: ["datasets"] });
       setDeleteDialogOpen(false);
     },
   });
 
   // Check if baseline exists
   const { data: baselineCheck } = useQuery({
-    queryKey: ['baseline-check', dataset.id],
+    queryKey: ["baseline-check", dataset.id],
     queryFn: () => baselineAPI.checkExists(dataset.id),
   });
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   };
 
@@ -65,7 +76,7 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
             <div className="flex-1">
               <CardTitle className="text-lg">{dataset.name}</CardTitle>
               <CardDescription className="mt-1">
-                {dataset.description || 'No description provided'}
+                {dataset.description || "No description provided"}
               </CardDescription>
             </div>
             <DatabaseIcon className="h-5 w-5 text-blue-600 shrink-0 ml-2" />
@@ -127,8 +138,10 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
                         Baseline Trained
                       </div>
                       <div className="text-xs text-green-600 mt-0.5 truncate">
-                        {baselineCheck.model_type.replace('_', ' ')} • 
-                        {' '}{(baselineCheck.test_accuracy * 100).toFixed(1)}% accuracy
+                        {baselineCheck.model_type.replace("_", " ")} •{" "}
+                        {baselineCheck.test_accuracy != null
+                          ? `${(baselineCheck.test_accuracy * 100).toFixed(1)}% accuracy`
+                          : "Trained"}
                       </div>
                     </div>
                   </div>
@@ -170,8 +183,10 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
         datasetName={dataset.name}
         onSuccess={() => {
           // Refetch baseline check to update UI
-          queryClient.invalidateQueries({ queryKey: ['baseline-check', dataset.id] });
-          queryClient.invalidateQueries({ queryKey: ['models'] });
+          queryClient.invalidateQueries({
+            queryKey: ["baseline-check", dataset.id],
+          });
+          queryClient.invalidateQueries({ queryKey: ["models"] });
         }}
       />
       {/* ========== END NEW DIALOG ========== */}
@@ -201,7 +216,9 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{stats.total_samples}</div>
+                    <div className="text-2xl font-bold">
+                      {stats.total_samples}
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -212,7 +229,9 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{stats.num_features}</div>
+                    <div className="text-2xl font-bold">
+                      {stats.num_features}
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -223,7 +242,9 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{stats.num_classes}</div>
+                    <div className="text-2xl font-bold">
+                      {stats.num_classes}
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -273,9 +294,11 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
                 <div className="flex items-start gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                   <AlertCircle className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
                   <div className="text-sm">
-                    <p className="font-medium text-orange-900">High Noise Level Detected</p>
+                    <p className="font-medium text-orange-900">
+                      High Noise Level Detected
+                    </p>
                     <p className="text-orange-700 mt-1">
-                      This dataset has {stats.noise_percentage}% noisy labels. 
+                      This dataset has {stats.noise_percentage}% noisy labels.
                       Consider running detection to identify mislabeled samples.
                     </p>
                   </div>
@@ -300,7 +323,8 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
           <DialogHeader>
             <DialogTitle>Delete Dataset</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{dataset.name}"? This action cannot be undone.
+              Are you sure you want to delete "{dataset.name}"? This action
+              cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -316,7 +340,7 @@ export function DatasetCard({ dataset }: DatasetCardProps) {
               onClick={() => deleteMutation.mutate()}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
           {deleteMutation.isError && (

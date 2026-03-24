@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { detectionAPI, datasetAPI } from "@/services/api";
 import { Button } from "@/components/ui/button";
@@ -39,12 +39,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PriorityWeights, SignalType } from "@/types/detection";
-import { useNavigate } from 'react-router-dom';
-import { CheckSquare } from 'lucide-react';
-
+import { useNavigate } from "react-router-dom";
+import { CheckSquare } from "lucide-react";
 
 export function DetectionPage() {
-  const [selectedDatasetId, setSelectedDatasetId] = useState<number | undefined>();
+  const [selectedDatasetId, setSelectedDatasetId] = useState<
+    number | undefined
+  >();
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.7);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
 
@@ -58,7 +59,9 @@ export function DetectionPage() {
 
   // Filtering & Sorting
   const [minPriority, setMinPriority] = useState<number | undefined>();
-  const [sortBy, setSortBy] = useState<"priority" | "confidence" | "anomaly">("priority");
+  const [sortBy, setSortBy] = useState<"priority" | "confidence" | "anomaly">(
+    "priority",
+  );
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
 
   // NEW: Signal-specific filters
@@ -112,6 +115,7 @@ export function DetectionPage() {
     queryKey: ["detection-stats", selectedDatasetId],
     queryFn: () => detectionAPI.getStats(selectedDatasetId!),
     enabled: !!selectedDatasetId,
+    staleTime: 1000 * 60 * 5,
   });
 
   // NEW: Fetch signal stats
@@ -119,6 +123,7 @@ export function DetectionPage() {
     queryKey: ["signal-stats", selectedDatasetId],
     queryFn: () => detectionAPI.getSignalStats(selectedDatasetId!),
     enabled: !!selectedDatasetId,
+    staleTime: 1000 * 60 * 5,
   });
 
   // Run detection mutation with priority weights
@@ -138,12 +143,13 @@ export function DetectionPage() {
     },
   });
 
-  // Generate suggestions mutation
+  // Generate suggestions mutation — iteration auto-detected by backend
   const generateSuggestionsMutation = useMutation({
     mutationFn: (datasetId: number) =>
-      detectionAPI.generateSuggestions(datasetId, 1),
+      detectionAPI.generateSuggestions(datasetId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["detections"] });
+      queryClient.invalidateQueries({ queryKey: ["suggestions"] });
     },
   });
 
@@ -153,14 +159,18 @@ export function DetectionPage() {
     }
   };
 
+  const handleWeightsChange = useCallback((weights: PriorityWeights) => {
+    setPriorityWeights(weights);
+  }, []);
+
+  const handleResetWeights = useCallback(() => {
+    setPriorityWeights({ confidence: 0.6, anomaly: 0.4 });
+  }, []);
+
   const handleGenerateSuggestions = () => {
     if (selectedDatasetId) {
       generateSuggestionsMutation.mutate(selectedDatasetId);
     }
-  };
-
-  const handleResetWeights = () => {
-    setPriorityWeights({ confidence: 0.6, anomaly: 0.4 });
   };
 
   // Enable real-time metrics updates
@@ -288,39 +298,39 @@ export function DetectionPage() {
           </div>
 
           {/* Generate Suggestions & Review Button */}
-{detections && detections.length > 0 && (
-  <div className="pt-4 border-t">
-    <div className="flex gap-3">
-      <Button
-        onClick={handleGenerateSuggestions}
-        disabled={generateSuggestionsMutation.isPending}
-        variant="secondary"
-        className="flex-1"
-      >
-        {generateSuggestionsMutation.isPending ? (
-          <>
-            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-            Generating...
-          </>
-        ) : (
-          <>
-            <Sparkles className="mr-2 h-4 w-4" />
-            Generate Suggestions
-          </>
-        )}
-      </Button>
-      
-      <Button
-        onClick={() => navigate('/correction')}
-        variant="default"
-        className="flex-1"
-      >
-        <CheckSquare className="mr-2 h-4 w-4" />
-        Review Suggestions
-      </Button>
-    </div>
-  </div>
-)}
+          {detections && detections.length > 0 && (
+            <div className="pt-4 border-t">
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleGenerateSuggestions}
+                  disabled={generateSuggestionsMutation.isPending}
+                  variant="secondary"
+                  className="flex-1"
+                >
+                  {generateSuggestionsMutation.isPending ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Generate Suggestions
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  onClick={() => navigate("/correction")}
+                  variant="default"
+                  className="flex-1"
+                >
+                  <CheckSquare className="mr-2 h-4 w-4" />
+                  Review Suggestions
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Success Messages */}
           {runDetectionMutation.isSuccess && runDetectionMutation.data && (
@@ -347,7 +357,7 @@ export function DetectionPage() {
       {selectedDatasetId && (
         <PriorityWeightsControl
           weights={priorityWeights}
-          onChange={setPriorityWeights}
+          onChange={handleWeightsChange}
           onReset={handleResetWeights}
         />
       )}
@@ -428,7 +438,12 @@ export function DetectionPage() {
                 {signalStats.confidence_dominant}
               </div>
               <p className="text-xs text-gray-500">
-                {((signalStats.confidence_dominant / signalStats.total_detections) * 100).toFixed(1)}% of detections
+                {(
+                  (signalStats.confidence_dominant /
+                    signalStats.total_detections) *
+                  100
+                ).toFixed(1)}
+                % of detections
               </p>
             </CardContent>
           </Card>
@@ -445,7 +460,12 @@ export function DetectionPage() {
                 {signalStats.anomaly_dominant}
               </div>
               <p className="text-xs text-gray-500">
-                {((signalStats.anomaly_dominant / signalStats.total_detections) * 100).toFixed(1)}% of detections
+                {(
+                  (signalStats.anomaly_dominant /
+                    signalStats.total_detections) *
+                  100
+                ).toFixed(1)}
+                % of detections
               </p>
             </CardContent>
           </Card>
@@ -462,7 +482,11 @@ export function DetectionPage() {
                 {signalStats.both_high}
               </div>
               <p className="text-xs text-gray-500">
-                {((signalStats.both_high / signalStats.total_detections) * 100).toFixed(1)}% of detections
+                {(
+                  (signalStats.both_high / signalStats.total_detections) *
+                  100
+                ).toFixed(1)}
+                % of detections
               </p>
             </CardContent>
           </Card>
@@ -493,7 +517,9 @@ export function DetectionPage() {
                       </div>
                       <Tabs
                         value={viewMode}
-                        onValueChange={(v) => setViewMode(v as "cards" | "table")}
+                        onValueChange={(v) =>
+                          setViewMode(v as "cards" | "table")
+                        }
                       >
                         <TabsList>
                           <TabsTrigger value="cards">Cards</TabsTrigger>
@@ -512,7 +538,7 @@ export function DetectionPage() {
                           value={minPriority?.toString() || "all"}
                           onValueChange={(value: string) => {
                             setMinPriority(
-                              value === "all" ? undefined : parseFloat(value)
+                              value === "all" ? undefined : parseFloat(value),
                             );
                             setPage(1);
                           }}
@@ -545,8 +571,12 @@ export function DetectionPage() {
                             <SelectItem value="priority">
                               Priority Score
                             </SelectItem>
-                            <SelectItem value="confidence">Confidence</SelectItem>
-                            <SelectItem value="anomaly">Anomaly Score</SelectItem>
+                            <SelectItem value="confidence">
+                              Confidence
+                            </SelectItem>
+                            <SelectItem value="anomaly">
+                              Anomaly Score
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -699,33 +729,52 @@ export function DetectionPage() {
                 <CardHeader>
                   <CardTitle>Signal Statistics Summary</CardTitle>
                   <CardDescription>
-                    Breakdown of signal dominance across {signalStats.total_detections} detections
+                    Breakdown of signal dominance across{" "}
+                    {signalStats.total_detections} detections
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="text-center p-4 bg-blue-50 rounded-lg">
-                      <div className="text-xs text-gray-600 mb-1">Avg Confidence</div>
+                      <div className="text-xs text-gray-600 mb-1">
+                        Avg Confidence
+                      </div>
                       <div className="text-2xl font-bold text-blue-600">
                         {(signalStats.avg_confidence * 100).toFixed(1)}%
                       </div>
                     </div>
                     <div className="text-center p-4 bg-purple-50 rounded-lg">
-                      <div className="text-xs text-gray-600 mb-1">Avg Anomaly</div>
+                      <div className="text-xs text-gray-600 mb-1">
+                        Avg Anomaly
+                      </div>
                       <div className="text-2xl font-bold text-purple-600">
                         {(signalStats.avg_anomaly * 100).toFixed(1)}%
                       </div>
                     </div>
                     <div className="text-center p-4 bg-green-50 rounded-lg">
-                      <div className="text-xs text-gray-600 mb-1">Confidence Dom.</div>
+                      <div className="text-xs text-gray-600 mb-1">
+                        Confidence Dom.
+                      </div>
                       <div className="text-2xl font-bold text-green-600">
-                        {((signalStats.confidence_dominant / signalStats.total_detections) * 100).toFixed(0)}%
+                        {(
+                          (signalStats.confidence_dominant /
+                            signalStats.total_detections) *
+                          100
+                        ).toFixed(0)}
+                        %
                       </div>
                     </div>
                     <div className="text-center p-4 bg-orange-50 rounded-lg">
-                      <div className="text-xs text-gray-600 mb-1">Anomaly Dom.</div>
+                      <div className="text-xs text-gray-600 mb-1">
+                        Anomaly Dom.
+                      </div>
                       <div className="text-2xl font-bold text-orange-600">
-                        {((signalStats.anomaly_dominant / signalStats.total_detections) * 100).toFixed(0)}%
+                        {(
+                          (signalStats.anomaly_dominant /
+                            signalStats.total_detections) *
+                          100
+                        ).toFixed(0)}
+                        %
                       </div>
                     </div>
                   </div>

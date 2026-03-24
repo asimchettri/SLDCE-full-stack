@@ -65,7 +65,7 @@ export interface FeedbackListResponse {
   total_pages: number;
 }
 
-export type FeedbackAction = 'accept' | 'reject' | 'modify';
+export type FeedbackAction = 'approve' | 'reject' | 'modify' | 'uncertain';
 
 export interface FeedbackFilters {
   dataset_id?: number;

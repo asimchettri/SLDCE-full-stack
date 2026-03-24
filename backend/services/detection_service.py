@@ -8,11 +8,13 @@ from models.model import MLModel
 from fastapi import HTTPException
 from typing import List, Dict, Any, Optional, Tuple
 import json
-from datetime import datetime
+from datetime import datetime,timezone
 import logging
 import numpy as np  
+from services.engine_registry import get_engine_registry
+from sqlalchemy import func as sa_func
 
-from services.ml_integration import get_ml_integration
+# ml_integration imported inside run_detection to avoid circular imports
 
 logger = logging.getLogger(__name__)
 
@@ -84,171 +86,194 @@ class DetectionService:
         priority_weights: Optional[Dict[str, float]] = None,
         use_ml: bool = True
     ) -> Dict[str, Any]:
-        """
-        Run detection on a dataset using Dev 1's ML pipeline
-        UPDATED: Now creates/updates model in database
-        
-        Args:
-            db: Database session
-            dataset_id: ID of dataset to analyze
-            confidence_threshold: Threshold for confidence detection
-            max_samples: Optional limit on samples to analyze
-            priority_weights: Custom weights for signal fusion
-            use_ml: If True, use ML pipeline. If False, use simulation (for testing)
-            
-        Returns:
-            Detection run summary with stats
-        """
-        # Get samples from database
+
+        # Step 1: Get samples
         samples_query = db.query(Sample).filter(Sample.dataset_id == dataset_id)
-        
+
         if max_samples:
             samples_query = samples_query.limit(max_samples)
-        
+
         samples = samples_query.all()
-        
+
         if not samples:
             raise HTTPException(
-                status_code=404,
-                detail=f"No samples found for dataset {dataset_id}"
+                status_code=400,
+                detail=f"Dataset {dataset_id} has no samples. Upload data before running detection."
             )
-        
+
+     
+            # Step 2: Determine next iteration number dynamically
+       
+        latest_iteration = db.query(sa_func.max(Detection.iteration)).join(
+            Sample, Detection.sample_id == Sample.id
+        ).filter(
+            Sample.dataset_id == dataset_id
+        ).scalar()
+        iteration = (latest_iteration or 0) + 1
+        model_id = None                                 
+
+        # Step 3: NOW safe to use iteration in the duplicate check
+        existing_detections = db.query(Detection).join(
+            Sample, Detection.sample_id == Sample.id
+        ).filter(
+            Sample.dataset_id == dataset_id,
+            Detection.iteration == iteration
+        ).count()
+
+        if existing_detections > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Detection already run for dataset {dataset_id}, iteration {iteration}. "
+                    f"Found {existing_detections} existing detections. "
+                    f"To re-run, delete existing detections first."
+                )
+            )
+
         logger.info(f"Running detection on {len(samples)} samples from dataset {dataset_id}")
-        
+
         detections_created = 0
-        iteration = 1  # Phase 1: Single iteration
-        model_id = None  #  Track model ID
-        
+
         if use_ml:
-            # === USE DEV 1'S ML PIPELINE ===
             try:
-                ml = get_ml_integration()
-                
-                #  Get model config from ML integration
-                model_name = ml.config.get("model", {}).get("name", "random_forest")
-                model_params = ml.config.get("model", {}).get("params", {
-                    "n_estimators": 100,
-                    "random_state": 42,
-                    "n_jobs": -1
-                })
-                
-                #  Create or get model in database
+                from services.ml_integration import fit_dataset, detect_noise
+
+                fit_result = fit_dataset(db, dataset_id)
+                logger.info(
+                    f"Engine fitted: {fit_result['samples_fitted']} samples, "
+                    f"classes={fit_result['classes']}"
+                )
+
                 db_model = DetectionService._create_or_get_model(
                     db,
                     dataset_id=dataset_id,
-                    model_name=model_name,
-                    model_params=model_params,
+                    model_name="self_learning_engine",
+                    model_params={
+                        "contamination": 0.1,
+                        "initial_threshold": 0.5,
+                        "n_estimators": 100,
+                    },
                     is_baseline=True
                 )
                 model_id = db_model.id
-                
-                # Run full detection pipeline
-                ml_results = ml.run_full_detection(
-                    samples=samples,
-                    priority_weights=priority_weights,
-                    confidence_threshold=confidence_threshold
+
+                detection_result = detect_noise(db, dataset_id)
+                flagged_samples = detection_result["flagged_samples"]
+
+                logger.info(
+                    f"Detection complete: {len(flagged_samples)} flagged, "
+                    f"threshold={detection_result['current_threshold']:.3f}"
                 )
 
-                from sklearn.model_selection import train_test_split
-
-                # Convert samples to arrays for baseline evaluation
-                X_all, y_all = DetectionService._samples_to_arrays(samples)
-
-                # Split for baseline evaluation (same random state as retrain for consistency)
-                X_train, X_test, y_train, y_test = train_test_split(
-                    X_all, y_all, test_size=0.2, random_state=42,
-                    stratify=y_all if len(np.unique(y_all)) > 1 else None
-                )
-
-                # Evaluate baseline model on test set
-                y_pred_test = ml.model.predict(X_test)
-                baseline_metrics = ml.evaluate_model(X_test, y_test, y_pred_test)
-
-                # Update model with baseline metrics
-                db_model.test_accuracy = baseline_metrics['accuracy']
-                db_model.precision = baseline_metrics['precision']
-                db_model.recall = baseline_metrics['recall']
-                db_model.f1_score = baseline_metrics['f1_score']
-                db_model.num_samples_trained = len(X_train)
-                db.commit()
-
-                logger.info(f"📊 Baseline Metrics Stored:")
-                logger.info(f"   Test Accuracy: {baseline_metrics['accuracy']:.4f}")
-                logger.info(f"   Precision: {baseline_metrics['precision']:.4f}")
-                logger.info(f"   Recall: {baseline_metrics['recall']:.4f}")
-                logger.info(f"   F1-Score: {baseline_metrics['f1_score']:.4f}")
-                
-                #  Extract metrics from ML pipeline for model update
-                if ml_results and len(ml_results) > 0:
-                    # Calculate basic metrics from detection results
-                    total_analyzed = len(ml_results)
-                    flagged_count = sum(1 for r in ml_results if r['flagged_by'] != 'none')
-                    
-                    # Update model with training info
-                    db_model.num_samples_trained = total_analyzed
-                    # Note: Actual accuracy will be calculated after corrections in retrain phase
-                    db.commit()
-                
-                # Create Detection records from ML results
-                for result in ml_results:
-                    # Skip samples that aren't flagged by either signal
-                    if result['flagged_by'] == 'none':
-                        continue  
-
-                    # Find corresponding sample
+                for flagged in flagged_samples:
                     sample = next(
-                        (s for s in samples if s.id == result['sample_id']),
+                        (s for s in samples if s.id == flagged["sample_id"]),
                         None
                     )
-                    
+
                     if not sample:
-                        logger.warning(f"Sample {result['sample_id']} not found")
+                        logger.warning(f"Sample {flagged['sample_id']} not found")
                         continue
-                    
-                    # Create detection record
+
+                    noise_prob = flagged["noise_probability"]
+
+                    registry = get_engine_registry()  # add this import at top of file
+                    engine_instance = registry.get(dataset_id)
+           
+                    # Get position of this sample in the engine's original index
+                    sample_pos = None
+                    if engine_instance and engine_instance._last_signals:
+                        try:
+                            sample_pos = list(engine_instance._X_original.index).index(flagged["sample_id"])
+                        except ValueError:
+                            sample_pos = None
+
+                    if sample_pos is not None and engine_instance._last_signals:
+                        sig = engine_instance._last_signals[sample_pos]
+                        # confidence signal: how much the model disagrees (1 - margin)
+                        confidence_score = float(np.clip(1.0 - sig.get("margin", 0.5), 0.0, 1.0))
+                        # anomaly signal: average of isolation + lof scores, normalized
+                        raw_anomaly = (sig.get("isolation_score", 0.0) + sig.get("lof_score", 0.0)) / 2.0
+                        anomaly_score = float(np.clip(raw_anomaly, 0.0, 1.0))
+                    else:
+                        # Fallback if signals not available
+                        confidence_score = float(np.clip(noise_prob, 0.0, 1.0))
+                        anomaly_score = float(np.clip(noise_prob, 0.0, 1.0))
+
+                    conf_w = (priority_weights or {}).get("confidence", 0.6)
+                    anom_w = (priority_weights or {}).get("anomaly", 0.4)
+                    weighted = confidence_score * conf_w + anomaly_score * anom_w
+                    agreement_bonus = confidence_score * anomaly_score * 0.2
+                    priority_score = float(np.clip(weighted + agreement_bonus, 0.0, 1.0))
+
+                    dominant = "confidence" if confidence_score >= anomaly_score else "anomaly"
+                    if confidence_score >= 0.7 and anomaly_score >= 0.7:
+                        dominant = "both"
+
+                    signal_breakdown = {
+                        "noise_probability": round(noise_prob, 4),
+                        "confidence_score": round(confidence_score, 4),
+                        "anomaly_score": round(anomaly_score, 4),
+                        "predicted_label": flagged["predicted_label"],
+                        "threshold": round(detection_result["current_threshold"], 4),
+                        "dominant_signal": dominant,
+                        "label_mismatch": (
+                            int(flagged["predicted_label"]) != int(sample.current_label)
+                        ),
+                        "agreement_bonus": round(agreement_bonus, 4),
+                        "priority_breakdown": {
+                            "weighted": round(weighted, 4),
+                            "bonus": round(agreement_bonus, 4),
+                            "final": round(priority_score, 4),
+                        }
+                    }
+
                     detection = Detection(
                         sample_id=sample.id,
                         iteration=iteration,
-                        confidence_score=result['confidence_score'],
-                        anomaly_score=result['anomaly_score'],
-                        predicted_label=result['predicted_label'],
-                        priority_score=result['priority_score'],
-                        signal_breakdown=json.dumps(result['signal_breakdown']),
+                        confidence_score=confidence_score,
+                        anomaly_score=anomaly_score,
+                        predicted_label=int(flagged["predicted_label"]),
+                        priority_score=priority_score,
+                        signal_breakdown=json.dumps(signal_breakdown),
                         priority_weights=json.dumps(priority_weights) if priority_weights else None
                     )
-                    
+
                     db.add(detection)
                     sample.is_suspicious = True
                     detections_created += 1
-                
+
+                db_model.num_samples_trained = len(samples)
+                db.commit()
+
                 logger.info(f"Created {detections_created} detection records")
-                
+
+            except HTTPException:
+                raise
             except Exception as e:
-                logger.error(f"ML detection failed: {e}")
+                logger.error(f"Engine detection failed: {e}", exc_info=True)
                 raise HTTPException(
                     status_code=500,
                     detail=f"Detection failed: {str(e)}"
                 )
-        
+
         else:
-            # === FALLBACK: SIMULATION (for testing without ML) ===
             logger.warning("Using simulation mode - not recommended for production")
-            
+
             for sample in samples:
-                # Simulate detection on actually mislabeled samples
                 is_mislabeled = sample.original_label != sample.current_label
-                
+
                 if is_mislabeled:
                     import random
                     confidence_score = random.uniform(0.75, 0.95)
                     anomaly_score = random.uniform(0.65, 0.90)
-                    
+
                     priority_score = DetectionService.calculate_priority_score(
                         confidence_score,
                         anomaly_score,
                         priority_weights
                     )
-                    
+
                     detection = Detection(
                         sample_id=sample.id,
                         iteration=iteration,
@@ -262,30 +287,27 @@ class DetectionService:
                             "simulated": True
                         })
                     )
-                    
+
                     db.add(detection)
                     sample.is_suspicious = True
                     detections_created += 1
-        
-        # Commit to database
+
         db.commit()
-        
-        # Calculate stats
+
         total_samples = len(samples)
-        suspicious_count = detections_created
-        detection_rate = (suspicious_count / total_samples * 100) if total_samples > 0 else 0
-        
+        detection_rate = (detections_created / total_samples * 100) if total_samples > 0 else 0
+
         return {
             "dataset_id": dataset_id,
-            "model_id": model_id,  #  Return model ID
+            "model_id": model_id,
             "iteration": iteration,
             "total_samples_analyzed": total_samples,
-            "suspicious_samples_found": suspicious_count,
+            "suspicious_samples_found": detections_created,
             "detection_rate": round(detection_rate, 2),
             "confidence_threshold": confidence_threshold,
             "ml_pipeline_used": use_ml,
             "priority_weights": priority_weights,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     
     @staticmethod
@@ -294,15 +316,20 @@ class DetectionService:
         anomaly: float,
         weights: Optional[Dict[str, float]] = None
     ) -> float:
-        """Calculate priority score with configurable weights"""
+        """
+        Meaningful priority: weighted sum + agreement bonus.
+        High confidence + high anomaly → higher than either alone.
+        """
         if weights is None:
             weights = {"confidence": 0.6, "anomaly": 0.4}
-        
-        priority = (
+
+        weighted = (
             confidence * weights.get("confidence", 0.6) +
             anomaly * weights.get("anomaly", 0.4)
         )
-        return min(max(priority, 0.0), 1.0)
+        # Agreement bonus: both signals high = more certain it's mislabeled
+        agreement_bonus = confidence * anomaly * 0.2
+        return float(min(max(weighted + agreement_bonus, 0.0), 1.0))
     
     @staticmethod
     def get_detections(
@@ -491,18 +518,3 @@ class DetectionService:
             "priority_weights": priority_weights
         }
     
-
-    @staticmethod
-    def _samples_to_arrays(samples: List[Any]) -> Tuple[np.ndarray, np.ndarray]:
-        """Convert Sample objects to numpy arrays"""
-        import json
-        
-        features = []
-        labels = []
-        
-        for sample in samples:
-            feat = json.loads(sample.features)
-            features.append(feat)
-            labels.append(sample.current_label)
-        
-        return np.array(features), np.array(labels)

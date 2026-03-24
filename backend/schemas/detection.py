@@ -41,6 +41,10 @@ class DetectionRunResponse(BaseModel):
     detection_rate: float
     confidence_threshold: float
     timestamp: str
+
+    model_id: Optional[int] = None
+    ml_pipeline_used: bool = True
+    priority_weights: Optional[Dict[str, float]] = None
     
     model_config = ConfigDict(protected_namespaces=())
 

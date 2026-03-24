@@ -4,7 +4,7 @@ import { suggestionAPI } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Check, X, Edit3, SkipForward } from 'lucide-react';
+import { Check, X, Edit3, SkipForward ,HelpCircle} from 'lucide-react';
 import type { Suggestion, SuggestionReviewStatus } from '@/types/suggestion';
 import { toast } from 'sonner';
 
@@ -27,7 +27,7 @@ export function SuggestionReviewActions({
     mutationFn: ({ status, reviewerNotes, customLabel }: { 
       status: SuggestionReviewStatus; 
       reviewerNotes?: string;
-      customLabel?: number;  //Add custom label to mutation type
+      customLabel?: number;  
     }) =>
       suggestionAPI.updateStatus(suggestion.id, { 
         status, 
@@ -42,6 +42,7 @@ export function SuggestionReviewActions({
         accepted: '✅ Suggestion accepted!',
         rejected: '❌ Suggestion rejected',
         modified: '✏️ Custom correction applied',
+        uncertain: '❓ Marked as uncertain — engine will learn from this',
       };
       
       toast.success(statusMessages[variables.status] || 'Updated');
@@ -60,10 +61,19 @@ export function SuggestionReviewActions({
     });
   };
 
+  
+
   const handleReject = () => {
     updateStatusMutation.mutate({ 
       status: 'rejected' as const,
       reviewerNotes: notes || 'Rejected - current label is correct'
+    });
+  };
+
+  const handleUncertain = () => {
+    updateStatusMutation.mutate({
+      status: 'uncertain',
+      reviewerNotes: notes || 'Reviewer is uncertain about this sample',
     });
   };
 
@@ -188,6 +198,14 @@ export function SuggestionReviewActions({
           <Edit3 className="h-3 w-3 mr-1" />
           Modify
         </Button>
+
+         <Button size="sm" variant="outline" onClick={handleUncertain}
+          disabled={updateStatusMutation.isPending}
+          className="border-amber-300 text-amber-700 hover:bg-amber-50">
+          <HelpCircle className="h-3 w-3 mr-1" />Uncertain
+        </Button>
+
+
         <Button
           size="sm"
           variant="ghost"

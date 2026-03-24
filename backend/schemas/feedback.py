@@ -10,7 +10,7 @@ class FeedbackBase(BaseModel):
     """Base feedback schema"""
     suggestion_id: int
     sample_id: int
-    action: str = Field(..., pattern="^(accept|reject|modify)$")
+    action: str = Field(..., pattern="^(approve|reject|modify|uncertain)$")
     final_label: int
     iteration: int
     

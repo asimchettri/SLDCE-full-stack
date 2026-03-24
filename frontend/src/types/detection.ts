@@ -46,6 +46,9 @@ export interface DetectionRunResponse {
   detection_rate: number;
   confidence_threshold: number;
   timestamp: string;
+  model_id: number | null;
+  ml_pipeline_used: boolean;
+  priority_weights: Record<string, number> | null;
 }
 
 export interface DetectionStats {
@@ -110,11 +113,19 @@ export interface PriorityWeights {
 
 
 export interface SignalBreakdown {
-  confidence: number;
-  anomaly: number;
-  entropy?: number;
-  distance?: number;
-  timestamp?: string;
+  noise_probability: number;
+  confidence_score: number;
+  anomaly_score: number;
+  predicted_label: number;
+  threshold: number;
+  dominant_signal: "confidence" | "anomaly" | "both";
+  label_mismatch: boolean;
+  agreement_bonus: number;
+  priority_breakdown: {
+    weighted: number;
+    bonus: number;
+    final: number;
+  };
 }
 
 export type SignalType = 'all' | 'confidence' | 'anomaly' | 'both';

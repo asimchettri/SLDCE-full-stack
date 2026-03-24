@@ -1,8 +1,8 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import type { ModelComparison } from '@/types/model';
+import type { ModelComparisonItem } from "@/types/model"
 
 interface ModelComparisonChartProps {
-  data: ModelComparison[];
+  data: ModelComparisonItem[];
 }
 
 export function ModelComparisonChart({ data }: ModelComparisonChartProps) {

@@ -42,62 +42,6 @@ class SampleResponse(BaseModel):
         from_attributes = True
 
 
-class DetectionResponse(BaseModel):
-    """Schema for detection response"""
-    id: int
-    sample_id: int
-    iteration: int
-    confidence_score: float
-    anomaly_score: float
-    predicted_label: int
-    priority_score: float
-    rank: Optional[int]
-    entropy_score: Optional[float] = None
-    distance_score: Optional[float] = None
-    signal_breakdown: Optional[str] = None  # JSON string
-    priority_weights: Optional[str] = None  # JSON string
-    detected_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-
-class SuggestionResponse(BaseModel):
-    """Schema for suggestion response"""
-    id: int
-    detection_id: int
-    suggested_label: int
-    reason: str
-    confidence: float
-    
-    class Config:
-        from_attributes = True
-
-
-class FeedbackCreate(BaseModel):
-    """Schema for creating feedback"""
-    suggestion_id: int
-    sample_id: int
-    action: str = Field(..., pattern="^(accept|reject|modify)$")
-    final_label: int
-    iteration: int
-    review_time_seconds: Optional[float] = None
-
-
-class FeedbackResponse(BaseModel):
-    """Schema for feedback response"""
-    id: int
-    suggestion_id: int
-    sample_id: int
-    action: str
-    final_label: int
-    iteration: int
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-
 class DatasetStats(BaseModel):
     """Dataset statistics"""
     dataset_id: int

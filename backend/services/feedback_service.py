@@ -20,36 +20,28 @@ class FeedbackService:
         action: str,
         final_label: int
     ) -> Any:
-        """
-        Create feedback record when suggestion is reviewed
-        
-        This is CRITICAL for Phase 2 learning system
-        """
-        # Get detection to find sample_id and iteration
         detection = db.query(Detection).filter(
             Detection.id == suggestion.detection_id
         ).first()
-        
+
         if not detection:
-            raise HTTPException(
-                status_code=404,
-                detail="Associated detection not found"
-            )
-        
-        # Check if feedback already exists
+            raise HTTPException(status_code=404, detail="Associated detection not found")
+
         existing = db.query(Feedback).filter(
             Feedback.suggestion_id == suggestion.id
         ).first()
-        
+
         if existing:
-            # Update existing feedback
             existing.action = action
             existing.final_label = final_label
             db.commit()
             db.refresh(existing)
+            # Also update engine's in-memory feedback store
+            FeedbackService._sync_feedback_to_engine(
+                db, detection, action, final_label, existing.sample_id
+            )
             return existing
-        
-        # Create new feedback
+
         feedback = Feedback(
             suggestion_id=suggestion.id,
             sample_id=detection.sample_id,
@@ -57,12 +49,52 @@ class FeedbackService:
             final_label=final_label,
             iteration=detection.iteration
         )
-        
         db.add(feedback)
         db.commit()
         db.refresh(feedback)
-        
+
+        # Sync to engine's in-memory feedback store
+        FeedbackService._sync_feedback_to_engine(
+            db, detection, action, final_label, feedback.sample_id
+        )
+
         return feedback
+
+    @staticmethod
+    def _sync_feedback_to_engine(
+        db: Session,
+        detection: Any,
+        action: str,
+        final_label: int,
+        sample_id: int,
+    ) -> None:
+        """Push feedback to the engine's in-memory FeedbackStore."""
+        try:
+            from services.ml_integration import apply_feedback
+            from models.dataset import Sample
+
+            sample = db.query(Sample).filter(Sample.id == sample_id).first()
+            if sample is None:
+                return
+
+            # Find dataset_id via sample
+            dataset_id = sample.dataset_id
+
+            apply_feedback(
+                db=db,
+                dataset_id=dataset_id,
+                sample_id=sample_id,
+                previous_label=sample.current_label,
+                updated_label=final_label,
+                decision_type=action,
+            )
+        except Exception as e:
+            # Non-fatal: DB feedback is already saved; engine sync failure
+            # only affects in-memory learning, not data integrity
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Engine feedback sync failed (non-fatal): {e}"
+            )
     
     @staticmethod
     def get_feedback(
@@ -73,25 +105,20 @@ class FeedbackService:
         limit: int = 100,
         offset: int = 0
     ) -> List[Feedback]:
-        """Get feedback with optional filters"""
         query = db.query(Feedback)
-        
-        # Join if filtering by dataset
-        if dataset_id or iteration:
+
+        # Only join Sample when filtering by dataset_id
+        if dataset_id is not None:
             query = query.join(Sample, Feedback.sample_id == Sample.id)
-        
-        if dataset_id:
             query = query.filter(Sample.dataset_id == dataset_id)
-        
-        if iteration:
+
+        if iteration is not None:
             query = query.filter(Feedback.iteration == iteration)
-        
-        if action:
+
+        if action is not None:
             query = query.filter(Feedback.action == action)
-        
-        # Order by most recent first
+
         query = query.order_by(Feedback.created_at.desc())
-        
         return query.offset(offset).limit(limit).all()
     
     @staticmethod
@@ -132,7 +159,7 @@ class FeedbackService:
             }
         
         # Count by action
-        accepted = sum(1 for f in feedback_list if f.action == 'accept')
+        accepted = sum(1 for f in feedback_list if f.action == 'approve')
         rejected = sum(1 for f in feedback_list if f.action == 'reject')
         modified = sum(1 for f in feedback_list if f.action == 'modify')
         
@@ -197,7 +224,7 @@ class FeedbackService:
                 acceptance_by_confidence[conf_range] = {'total': 0, 'accepted': 0}
             
             acceptance_by_confidence[conf_range]['total'] += 1
-            if feedback.action in ['accept', 'modify']:
+            if feedback.action in ['approve', 'modify']:
                 acceptance_by_confidence[conf_range]['accepted'] += 1
             
             # Group by priority ranges
@@ -206,7 +233,7 @@ class FeedbackService:
                 acceptance_by_priority[priority_range] = {'total': 0, 'accepted': 0}
             
             acceptance_by_priority[priority_range]['total'] += 1
-            if feedback.action in ['accept', 'modify']:
+            if feedback.action in ['approve', 'modify']:
                 acceptance_by_priority[priority_range]['accepted'] += 1
         
         # Calculate acceptance rates
@@ -265,20 +292,22 @@ class FeedbackService:
     def count_feedback(
         db: Session,
         dataset_id: Optional[int] = None,
-        action: Optional[str] = None
+        iteration: Optional[int] = None,
+        action: Optional[str] = None,
     ) -> int:
-        """Count feedback with filters"""
+        """Count feedback with filters. Only joins Sample when dataset_id is needed."""
         query = db.query(func.count(Feedback.id))
-        
-        if dataset_id or action:
+
+        if dataset_id is not None:
             query = query.join(Sample, Feedback.sample_id == Sample.id)
-        
-        if dataset_id:
             query = query.filter(Sample.dataset_id == dataset_id)
-        
-        if action:
+
+        if iteration is not None:
+            query = query.filter(Feedback.iteration == iteration)
+
+        if action is not None:
             query = query.filter(Feedback.action == action)
-        
+
         return query.scalar()
     
     @staticmethod
@@ -333,3 +362,12 @@ class FeedbackService:
                 "features": json.loads(sample.features)
             }
         }
+    
+
+
+    @staticmethod
+    def delete_feedback(db: Session, feedback_id: int) -> None:
+        """Delete feedback record. WARNING: removes learning data."""
+        feedback = FeedbackService.get_feedback_by_id(db, feedback_id)
+        db.delete(feedback)
+        db.commit()    

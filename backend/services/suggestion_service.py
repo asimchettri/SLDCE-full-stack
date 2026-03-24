@@ -6,7 +6,7 @@ from sqlalchemy import func
 from models.dataset import Sample, Detection, Suggestion
 from fastapi import HTTPException
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime,timezone
 import math
 
 
@@ -205,7 +205,7 @@ class SuggestionService:
         suggestion = SuggestionService.get_suggestion_by_id(db, suggestion_id)
         
         # Validate status
-        valid_statuses = ['accepted', 'rejected', 'modified']
+        valid_statuses = ['accepted', 'rejected', 'modified','uncertain']
         if status not in valid_statuses:
             raise HTTPException(
                 status_code=400,
@@ -222,10 +222,14 @@ class SuggestionService:
         # Determine final label based on action
         if status == 'accepted':
             final_label = suggestion.suggested_label
-            action = 'accept'
+            action = 'approve'
         elif status == 'rejected':
             final_label = sample.current_label
             action = 'reject'
+
+        elif status == 'uncertain':
+            final_label = sample.current_label  # keep current label
+            action = 'uncertain'        
         else:
             # Use custom label from user input
             if custom_label is None:
@@ -238,7 +242,7 @@ class SuggestionService:
         
         # Update suggestion
         suggestion.status = status
-        suggestion.reviewed_at = datetime.utcnow()
+        suggestion.reviewed_at = datetime.now(timezone.utc)
         
         if reviewer_notes:
             suggestion.reviewer_notes = reviewer_notes
@@ -246,7 +250,7 @@ class SuggestionService:
         db.commit()
         db.refresh(suggestion)
         
-        # CRITICAL: Create feedback record for learning system
+        #Create feedback record for learning system
         FeedbackService.create_feedback_from_suggestion(
             db,
             suggestion=suggestion,
@@ -282,7 +286,8 @@ class SuggestionService:
                 "accepted": 0,
                 "rejected": 0,
                 "modified": 0,
-                "acceptance_rate": 0.0
+                "acceptance_rate": 0.0,
+                "current_iteration": 1
             }
         
         # Count by status
@@ -295,6 +300,15 @@ class SuggestionService:
         reviewed = total - pending
         acceptance_rate = ((accepted + modified) / reviewed * 100) if reviewed > 0 else 0.0
         
+       # Derive current iteration from max detection iteration in suggestions
+        max_iteration = db.query(func.max(Detection.iteration)).join(
+            Suggestion, Detection.id == Suggestion.detection_id
+        ).join(
+            Sample, Detection.sample_id == Sample.id
+        ).filter(
+            Sample.dataset_id == dataset_id
+        ).scalar() or 1
+
         return {
             "dataset_id": dataset_id,
             "total_suggestions": total,
@@ -302,7 +316,8 @@ class SuggestionService:
             "accepted": accepted,
             "rejected": rejected,
             "modified": modified,
-            "acceptance_rate": round(acceptance_rate, 2)
+            "acceptance_rate": round(acceptance_rate, 2),
+            "current_iteration": max_iteration
         }
     
     @staticmethod
@@ -326,4 +341,11 @@ class SuggestionService:
         
         return query.scalar()
     
+
+    @staticmethod
+    def delete_suggestion(db: Session, suggestion_id: int) -> None:
+        """Delete suggestion record."""
+        suggestion = SuggestionService.get_suggestion_by_id(db, suggestion_id)
+        db.delete(suggestion)
+        db.commit()
 

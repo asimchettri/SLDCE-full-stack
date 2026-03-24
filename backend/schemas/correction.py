@@ -14,6 +14,7 @@ class CorrectionApplyResponse(BaseModel):
     corrections_applied: int
     labels_changed: int
     samples_rejected: int
+    samples_uncertain: int = 0 
     timestamp: str
     
     model_config = ConfigDict(protected_namespaces=())

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from models.experiment import Experiment, ExperimentIteration
 from fastapi import HTTPException
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime,timezone
 
 
 class ExperimentService:
@@ -140,7 +140,7 @@ class ExperimentService:
         experiment = ExperimentService.get_experiment_by_id(db, experiment_id)
         
         experiment.status = 'completed'
-        experiment.completed_at = datetime.utcnow()
+        experiment.completed_at = datetime.now(timezone.utc)
         
         if total_time_seconds:
             experiment.total_time_seconds = total_time_seconds

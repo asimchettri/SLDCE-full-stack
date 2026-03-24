@@ -62,13 +62,15 @@ export interface SuggestionStats {
   accepted: number;
   rejected: number;
   modified: number;
+  uncertain: number;
   acceptance_rate: number;
+    current_iteration: number;
 }
 
-export type SuggestionStatus = 'pending' | 'accepted' | 'rejected' | 'modified';
+export type SuggestionStatus = 'pending' | 'accepted' | 'rejected' | 'modified' | 'uncertain';
 
 // Only statuses that can be set during review (excludes 'pending')
-export type SuggestionReviewStatus = 'accepted' | 'rejected' | 'modified';
+export type SuggestionReviewStatus = 'accepted' | 'rejected' | 'modified' | 'uncertain';
 
 export interface SuggestionFilters {
   dataset_id?: number;

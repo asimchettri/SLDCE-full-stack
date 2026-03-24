@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { feedbackAPI, datasetAPI } from '@/services/api';
 import { Card, CardContent } from '@/components/ui/card';
@@ -22,9 +23,10 @@ import {
 } from 'lucide-react';
 import { FeedbackTimelineItem } from '@/components/FeedbackTimelineItem';
 import { FeedbackStatsDashboard } from '@/components/FeedbackStatsDashboard';
-import type { FeedbackAction } from '@/types/feedback';
+import type { Feedback, FeedbackAction } from '@/types/feedback';
 
 export function FeedbackPage() {
+  const navigate = useNavigate();
   const [selectedDatasetId, setSelectedDatasetId] = useState<number | undefined>();
   const [actionFilter, setActionFilter] = useState<FeedbackAction | 'all'>('all');
   const [iterationFilter, setIterationFilter] = useState<number | undefined>();
@@ -70,7 +72,7 @@ export function FeedbackPage() {
   });
 
   const totalPages = feedbackResponse?.total_pages || 1;
-  const feedback = feedbackResponse?.feedback || [];
+  const feedback: Feedback[] = feedbackResponse?.feedback || [];
   const hasData = feedback.length > 0;
 
   return (
@@ -137,9 +139,10 @@ export function FeedbackPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Actions</SelectItem>
-                  <SelectItem value="accept">Accepted</SelectItem>
+                  <SelectItem value="approve">Accepted</SelectItem>
                   <SelectItem value="reject">Rejected</SelectItem>
                   <SelectItem value="modify">Modified</SelectItem>
+                  <SelectItem value="uncertain">Uncertain</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -157,11 +160,11 @@ export function FeedbackPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="All Iterations" />
                 </SelectTrigger>
-                <SelectContent>
+               <SelectContent>
                   <SelectItem value="all">All Iterations</SelectItem>
-                  <SelectItem value="1">Iteration 1</SelectItem>
-                  <SelectItem value="2">Iteration 2</SelectItem>
-                  <SelectItem value="3">Iteration 3</SelectItem>
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map(i => (
+                    <SelectItem key={i} value={i.toString()}>Iteration {i}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -272,12 +275,12 @@ export function FeedbackPage() {
                 <h3 className="text-lg font-semibold mb-2">No Feedback Yet</h3>
                 <p className="text-sm text-gray-500 text-center max-w-sm mb-4">
                   {actionFilter !== 'all'
-                    ? `No ${actionFilter}ed suggestions found. Try changing the filter.`
+                     ? `No ${actionFilter === 'approve' ? 'accepted' : actionFilter + 'ed'} suggestions found. Try changing the filter.`
                     : 'Start reviewing suggestions to see feedback history here.'}
                 </p>
                 <Button
                   variant="outline"
-                  onClick={() => window.location.href = '/correction'}
+                  onClick={() => navigate('/correction')}
                 >
                   Go to Correction Page
                 </Button>

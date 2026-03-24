@@ -1,61 +1,64 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { 
-  Lightbulb, 
-  ChevronRight, 
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Lightbulb,
+  ChevronRight,
   Clock,
   CheckCircle,
   XCircle,
-  Edit
-} from 'lucide-react';
-import type { Suggestion } from '@/types/suggestion';
-import { SuggestionDetailsDialog } from './SuggestionDetailsDialog';
-import { SuggestionReviewActions } from './SuggestionReviewActions'
+  Edit,
+} from "lucide-react";
+import type { Suggestion } from "@/types/suggestion";
+import { SuggestionDetailsDialog } from "./SuggestionDetailsDialog";
+import { SuggestionReviewActions } from "./SuggestionReviewActions";
 
 interface SuggestionCardProps {
   suggestion: Suggestion;
   onStatusUpdate?: () => void;
 }
 
-export function SuggestionCard({ suggestion, onStatusUpdate }: SuggestionCardProps) {
+export function SuggestionCard({
+  suggestion,
+  onStatusUpdate,
+}: SuggestionCardProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [showActions, setShowActions] = useState(false);
 
   const getStatusConfig = (status: string) => {
     switch (status) {
-      case 'accepted':
+      case "accepted":
         return {
           icon: CheckCircle,
-          color: 'bg-green-100 text-green-800 border-green-200',
-          label: 'Accepted'
+          color: "bg-green-100 text-green-800 border-green-200",
+          label: "Accepted",
         };
-      case 'rejected':
+      case "rejected":
         return {
           icon: XCircle,
-          color: 'bg-red-100 text-red-800 border-red-200',
-          label: 'Rejected'
+          color: "bg-red-100 text-red-800 border-red-200",
+          label: "Rejected",
         };
-      case 'modified':
+      case "modified":
         return {
           icon: Edit,
-          color: 'bg-blue-100 text-blue-800 border-blue-200',
-          label: 'Modified'
+          color: "bg-blue-100 text-blue-800 border-blue-200",
+          label: "Modified",
         };
       default:
         return {
           icon: Clock,
-          color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-          label: 'Pending'
+          color: "bg-yellow-100 text-yellow-800 border-yellow-200",
+          label: "Pending",
         };
     }
   };
 
   const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 0.9) return 'text-green-600';
-    if (confidence >= 0.7) return 'text-blue-600';
-    return 'text-orange-600';
+    if (confidence >= 0.9) return "text-green-600";
+    if (confidence >= 0.7) return "text-blue-600";
+    return "text-orange-600";
   };
 
   const statusConfig = getStatusConfig(suggestion.status);
@@ -63,9 +66,13 @@ export function SuggestionCard({ suggestion, onStatusUpdate }: SuggestionCardPro
 
   return (
     <>
-      <Card className={`hover:shadow-md transition-all ${
-        suggestion.status === 'pending' ? 'border-l-4 border-l-orange-400' : ''
-      }`}>
+      <Card
+        className={`hover:shadow-md transition-all ${
+          suggestion.status === "pending"
+            ? "border-l-4 border-l-orange-400"
+            : ""
+        }`}
+      >
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-2">
@@ -90,7 +97,7 @@ export function SuggestionCard({ suggestion, onStatusUpdate }: SuggestionCardPro
                 <div className="text-center">
                   <div className="text-xs text-gray-500">Current</div>
                   <Badge variant="outline" className="mt-1">
-                    Class {suggestion.detection_id}
+                    Label ?
                   </Badge>
                 </div>
                 <div className="text-gray-400">→</div>
@@ -106,7 +113,9 @@ export function SuggestionCard({ suggestion, onStatusUpdate }: SuggestionCardPro
             {/* Confidence */}
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Confidence</span>
-              <span className={`text-sm font-bold ${getConfidenceColor(suggestion.confidence)}`}>
+              <span
+                className={`text-sm font-bold ${getConfidenceColor(suggestion.confidence)}`}
+              >
                 {(suggestion.confidence * 100).toFixed(1)}%
               </span>
             </div>
@@ -114,10 +123,9 @@ export function SuggestionCard({ suggestion, onStatusUpdate }: SuggestionCardPro
             {/* Reason Preview */}
             <div className="text-xs text-gray-600 bg-blue-50 p-2 rounded border border-blue-100">
               <span className="font-semibold">Reason: </span>
-              {suggestion.reason.length > 80 
-                ? `${suggestion.reason.substring(0, 80)}...` 
-                : suggestion.reason
-              }
+              {suggestion.reason.length > 80
+                ? `${suggestion.reason.substring(0, 80)}...`
+                : suggestion.reason}
             </div>
 
             {/* Review Notes (if reviewed) */}
@@ -130,7 +138,7 @@ export function SuggestionCard({ suggestion, onStatusUpdate }: SuggestionCardPro
 
             {/* Action Buttons */}
             <div className="pt-2 border-t space-y-2">
-              {suggestion.status === 'pending' ? (
+              {suggestion.status === "pending" ? (
                 <>
                   <Button
                     variant="outline"
@@ -138,9 +146,9 @@ export function SuggestionCard({ suggestion, onStatusUpdate }: SuggestionCardPro
                     className="w-full"
                     onClick={() => setShowActions(!showActions)}
                   >
-                    {showActions ? 'Hide Actions' : 'Review Suggestion'}
+                    {showActions ? "Hide Actions" : "Review Suggestion"}
                   </Button>
-                  
+
                   {showActions && (
                     <SuggestionReviewActions
                       suggestion={suggestion}
@@ -153,8 +161,11 @@ export function SuggestionCard({ suggestion, onStatusUpdate }: SuggestionCardPro
                 </>
               ) : (
                 <div className="text-xs text-gray-500 text-center">
-                  Reviewed on {new Date(suggestion.reviewed_at!).toLocaleDateString()}
-                </div>
+    {suggestion.reviewed_at
+      ? `Reviewed on ${new Date(suggestion.reviewed_at).toLocaleDateString()}`
+      : 'Reviewed'
+    }
+  </div>
               )}
 
               <Button

@@ -77,7 +77,7 @@ class SuggestionListResponse(BaseModel):
 
 class SuggestionUpdateRequest(BaseModel):
     """Request to update suggestion status"""
-    status: str = Field(..., pattern="^(accepted|rejected|modified)$")
+    status: str = Field(..., pattern="^(accepted|rejected|modified|uncertain)$")
     reviewer_notes: Optional[str] = None
     custom_label: Optional[int] = None  
     
@@ -93,5 +93,6 @@ class SuggestionStatsResponse(BaseModel):
     rejected: int
     modified: int
     acceptance_rate: float
+    current_iteration: int
     
     model_config = ConfigDict(protected_namespaces=())

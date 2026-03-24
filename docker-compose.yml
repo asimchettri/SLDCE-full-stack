@@ -1,0 +1,51 @@
+services:
+
+  # ── Backend ───────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sldce-backend
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - API_V1_PREFIX=/api/v1
+      - PROJECT_NAME=SLDCE
+      - DEBUG=False
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - MAX_ITERATIONS=10
+      - DETECTION_THRESHOLD=0.7
+      - BACKEND_CORS_ORIGINS=["http://localhost", "http://localhost:80", "http://frontend"]
+    volumes:
+      # Persist engine joblib files across container restarts
+      - engine_store:/app/engine_store
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/v1/datasets/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── Frontend ──────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # In Docker, frontend talks to backend via nginx proxy — no CORS needed
+        VITE_API_URL: ""
+    container_name: sldce-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  engine_store:
+    driver: local

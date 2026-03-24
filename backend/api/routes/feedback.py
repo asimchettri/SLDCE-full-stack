@@ -23,7 +23,7 @@ router = APIRouter()
 async def get_feedback(
     dataset_id: Optional[int] = Query(None, description="Filter by dataset ID"),
     iteration: Optional[int] = Query(None, description="Filter by iteration"),
-    action: Optional[str] = Query(None, description="Filter by action: accept, reject, modify"),
+    action: Optional[str] = Query(None, description="Filter by action: approve, reject, modify,uncertain"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=200, description="Items per page"),
     db: Session = Depends(get_db)
@@ -61,29 +61,6 @@ async def get_feedback(
         "total_pages": total_pages
     }
 
-
-@router.get("/{feedback_id}", response_model=FeedbackResponse)
-async def get_feedback_by_id(
-    feedback_id: int = Path(..., description="Feedback ID"),
-    db: Session = Depends(get_db)
-):
-    """Get specific feedback by ID"""
-    feedback = FeedbackService.get_feedback_by_id(db, feedback_id)
-    return feedback
-
-
-@router.get("/{feedback_id}/details")
-async def get_feedback_details(
-    feedback_id: int = Path(..., description="Feedback ID"),
-    db: Session = Depends(get_db)
-):
-    """
-    Get feedback with full context
-    
-    Includes suggestion, detection, and sample details.
-    """
-    result = FeedbackService.get_feedback_with_details(db, feedback_id)
-    return result
 
 
 @router.get("/stats/{dataset_id}", response_model=FeedbackStatsResponse)
@@ -125,18 +102,38 @@ async def analyze_feedback_patterns(
     return patterns
 
 
-@router.delete("/{feedback_id}")
-async def delete_feedback(
+@router.get("/{feedback_id}", response_model=FeedbackResponse)
+async def get_feedback_by_id(
+    feedback_id: int = Path(..., description="Feedback ID"),
+    db: Session = Depends(get_db)
+):
+    """Get specific feedback by ID"""
+    feedback = FeedbackService.get_feedback_by_id(db, feedback_id)
+    return feedback
+
+
+@router.get("/{feedback_id}/details")
+async def get_feedback_details(
     feedback_id: int = Path(..., description="Feedback ID"),
     db: Session = Depends(get_db)
 ):
     """
-    Delete feedback (admin only - use with caution)
+    Get feedback with full context
     
-    WARNING: Deleting feedback removes learning data for Phase 2.
+    Includes suggestion, detection, and sample details.
     """
+    result = FeedbackService.get_feedback_with_details(db, feedback_id)
+    return result
+
+
+
+
+@router.delete("/{feedback_id}")
+async def delete_feedback(
+    feedback_id: int = Path(..., description="Feedback ID"),
+    db: Session = Depends(get_db),
+):
+    """Delete feedback (admin only - use with caution)"""
     feedback = FeedbackService.get_feedback_by_id(db, feedback_id)
-    db.delete(feedback)
-    db.commit()
-    
+    FeedbackService.delete_feedback(db, feedback_id)
     return {"message": "Feedback deleted successfully", "id": feedback_id}

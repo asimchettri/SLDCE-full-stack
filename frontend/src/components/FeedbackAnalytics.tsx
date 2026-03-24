@@ -9,11 +9,11 @@ interface FeedbackAnalyticsProps {
 }
 
 export function FeedbackAnalytics({ datasetId, iteration = 1 }: FeedbackAnalyticsProps) {
-  const { data: stats } = useQuery({
+const { data: stats } = useQuery({
     queryKey: ['feedback-stats', datasetId],
     queryFn: () => feedbackAPI.getStats(datasetId),
     enabled: !!datasetId,
-  });
+  }); 
 
   const { data: patterns } = useQuery({
     queryKey: ['feedback-patterns', datasetId, iteration],

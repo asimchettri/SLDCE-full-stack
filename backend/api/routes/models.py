@@ -24,12 +24,25 @@ async def get_models(
     models = ModelService.get_all_models(db, dataset_id, skip, limit)
     return models
 
+@router.get("/dataset/{dataset_id}/compare", response_model=List[ModelComparisonResponse])
+async def compare_models(dataset_id: int, db: Session = Depends(get_db)):
+    """Compare all models for a dataset"""
+    comparison = ModelService.compare_models(db, dataset_id)
+    return comparison
+
 
 @router.get("/{model_id}", response_model=MLModelResponse)
 async def get_model(model_id: int, db: Session = Depends(get_db)):
     """Get a specific model by ID"""
     model = ModelService.get_model_by_id(db, model_id)
     return model
+
+
+@router.get("/{model_id}/iterations", response_model=List[ModelIterationResponse])
+async def get_model_iterations(model_id: int, db: Session = Depends(get_db)):
+    """Get all training iterations for a model"""
+    iterations = ModelService.get_model_iterations(db, model_id)
+    return iterations
 
 
 @router.post("/", response_model=MLModelResponse, status_code=201)
@@ -48,19 +61,6 @@ async def create_model(
     )
     return new_model
 
-
-@router.get("/{model_id}/iterations", response_model=List[ModelIterationResponse])
-async def get_model_iterations(model_id: int, db: Session = Depends(get_db)):
-    """Get all training iterations for a model"""
-    iterations = ModelService.get_model_iterations(db, model_id)
-    return iterations
-
-
-@router.get("/dataset/{dataset_id}/compare", response_model=List[ModelComparisonResponse])
-async def compare_models(dataset_id: int, db: Session = Depends(get_db)):
-    """Compare all models for a dataset"""
-    comparison = ModelService.compare_models(db, dataset_id)
-    return comparison
 
 
 @router.delete("/{model_id}")

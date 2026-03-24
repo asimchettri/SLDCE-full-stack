@@ -41,10 +41,18 @@ async def run_detection(
 @router.post("/suggestions", response_model=SuggestionGenerateResponse)
 async def generate_suggestions(
     dataset_id: int = Query(..., description="Dataset ID"),
-    iteration: int = Query(1, description="Iteration number"),
+    iteration: int = Query(None, description="Iteration number (auto-detected if not provided)"),
     db: Session = Depends(get_db)
 ):
     """Generate correction suggestions for detected samples"""
+    # Auto-detect the latest iteration from detections if not provided
+    if iteration is None:
+        from models.dataset import Detection, Sample
+        from sqlalchemy import func
+        latest = db.query(func.max(Detection.iteration)).join(
+            Sample, Detection.sample_id == Sample.id
+        ).filter(Sample.dataset_id == dataset_id).scalar()
+        iteration = latest or 1
     result = SuggestionService.generate_suggestions(db, dataset_id, iteration)
     return result
 
@@ -56,6 +64,16 @@ async def get_detection_stats(
 ):
     """Get detection statistics for a dataset"""
     stats = DetectionService.get_detection_stats(db, dataset_id)
+    return stats
+
+
+@router.get("/signal-stats/{dataset_id}", response_model=SignalStatsResponse)
+async def get_signal_stats(
+    dataset_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get signal-specific statistics for a dataset"""
+    stats = DetectionService.get_signal_stats(db, dataset_id)
     return stats
 
 
@@ -86,6 +104,13 @@ async def get_detections(
     return detections
 
 
+
+
+
+
+
+
+
 @router.get("/{detection_id}")
 async def get_detection_details(
     detection_id: int,
@@ -94,13 +119,3 @@ async def get_detection_details(
     """Get detection with sample details"""
     result = DetectionService.get_detection_with_sample(db, detection_id)
     return result
-
-
-@router.get("/signal-stats/{dataset_id}", response_model=SignalStatsResponse)
-async def get_signal_stats(
-    dataset_id: int,
-    db: Session = Depends(get_db)
-):
-    """Get signal-specific statistics for a dataset"""
-    stats = DetectionService.get_signal_stats(db, dataset_id)
-    return stats

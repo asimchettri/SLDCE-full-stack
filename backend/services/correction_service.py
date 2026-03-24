@@ -10,7 +10,7 @@ import json
 import pandas as pd
 import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime,timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -62,6 +62,7 @@ class CorrectionService:
         corrections_applied = 0
         labels_changed = 0
         samples_rejected = 0
+        samples_uncertain = 0
         
         for feedback in feedback_list:
             sample = db.query(Sample).filter(Sample.id == feedback.sample_id).first()
@@ -74,7 +75,7 @@ class CorrectionService:
             old_label = sample.current_label
             
             # Apply correction based on action
-            if feedback.action == 'accept':
+            if feedback.action == 'approve':
                 # Accept suggestion - update to suggested label
                 sample.current_label = feedback.final_label
                 sample.is_corrected = True
@@ -100,6 +101,10 @@ class CorrectionService:
                 samples_rejected += 1
                 logger.info(f"❌ Sample {sample.id}: Kept label {old_label} (rejected)")
         
+            elif feedback.action == 'uncertain':
+                samples_uncertain += 1
+                logger.info(f"❓ Sample {sample.id}: Uncertain, label kept as {old_label}")
+
         # Commit all changes
         db.commit()
         
@@ -112,7 +117,8 @@ class CorrectionService:
             "corrections_applied": corrections_applied,
             "labels_changed": labels_changed,
             "samples_rejected": samples_rejected,
-            "timestamp": datetime.utcnow().isoformat()
+            "samples_uncertain": samples_uncertain, 
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     
     @staticmethod
@@ -141,8 +147,8 @@ class CorrectionService:
         
         if not samples:
             raise HTTPException(status_code=404, detail="No samples found in dataset")
-    
-    # Get original column names
+
+        # Get original column names
         try:
             feature_names = json.loads(dataset.feature_names) if dataset.feature_names else None
             label_column_name = dataset.label_column_name or 'label'
@@ -205,11 +211,7 @@ class CorrectionService:
         )
         
         logger.info(f"✅ Exported cleaned dataset to {file_path}")
-        logger.info(f"   - Total samples: {len(samples)}")
-        logger.info(f"   - Corrected samples: {corrected_samples}")
-        logger.info(f"   - Labels changed: {labels_changed}")
-        logger.info(f"   - Column names preserved: {feature_names is not None}")
-        
+     
         return {
             "dataset_id": dataset_id,
             "dataset_name": dataset.name,
@@ -221,7 +223,7 @@ class CorrectionService:
                 (labels_changed / len(samples) * 100) if len(samples) > 0 else 0,
                 2
             ),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     
     @staticmethod

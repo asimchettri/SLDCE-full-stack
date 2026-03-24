@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text, JSON
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text, JSON,ForeignKey
 from sqlalchemy.sql import func
 from core.database import Base
 
@@ -8,7 +8,7 @@ class Experiment(Base):
     __tablename__ = "experiments"
     
     id = Column(Integer, primary_key=True, index=True)
-    dataset_id = Column(Integer, nullable=False, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Experiment info
     name = Column(String(255), nullable=False)
@@ -43,7 +43,8 @@ class ExperimentIteration(Base):
     __tablename__ = "experiment_iterations"
     
     id = Column(Integer, primary_key=True, index=True)
-    experiment_id = Column(Integer, nullable=False, index=True)
+    experiment_id = Column(Integer, ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False, index=True)
+
     iteration_number = Column(Integer, nullable=False)
     
     # Model performance

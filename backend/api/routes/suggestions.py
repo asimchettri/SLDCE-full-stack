@@ -1,7 +1,7 @@
 """
 Suggestions API routes
 """
-from fastapi import APIRouter, Depends, Query, Path
+from fastapi import APIRouter, Depends, Query, Path,HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from core.database import get_db
@@ -16,6 +16,10 @@ from schemas.suggestion import (
 )
 from services.suggestion_service import SuggestionService
 import math
+from services.feedback_service import FeedbackService
+from models.dataset import Detection, Sample
+from datetime import datetime, timezone
+from models.dataset import Suggestion
 
 router = APIRouter()
 
@@ -85,6 +89,79 @@ async def get_suggestions(
     }
 
 
+@router.get("/stats/{dataset_id}", response_model=SuggestionStatsResponse)
+async def get_suggestion_stats(
+    dataset_id: int = Path(..., description="Dataset ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get suggestion statistics for a dataset
+    
+    Returns counts by status and acceptance rate.
+    """
+    stats = SuggestionService.get_suggestion_stats(db, dataset_id)
+    return stats
+
+
+
+
+
+@router.post("/batch-update")
+async def batch_update_suggestions(
+    payload: dict,
+    db: Session = Depends(get_db)
+):
+    """
+    Batch approve or reject multiple suggestions at once.
+    
+    payload: { "suggestion_ids": [1,2,3], "action": "accepted" | "rejected" }
+    """
+    
+   
+
+    suggestion_ids = payload.get("suggestion_ids", [])
+    action = payload.get("action")
+
+    if action not in ("accepted", "rejected"):
+        raise HTTPException(status_code=400, detail="action must be 'accepted' or 'rejected'")
+    if not suggestion_ids:
+        raise HTTPException(status_code=400, detail="suggestion_ids cannot be empty")
+
+
+    updated = 0
+    for sid in suggestion_ids:
+        suggestion = db.query(Suggestion).filter(Suggestion.id == sid).first()
+        if suggestion and suggestion.status == "pending":
+            suggestion.status = action
+            suggestion.reviewed_at = datetime.now(timezone.utc)
+            suggestion.reviewer_notes = f"Batch {action}"
+
+            # Determine final label
+            detection = db.query(Detection).filter(
+                Detection.id == suggestion.detection_id
+            ).first()
+            sample = db.query(Sample).filter(
+                Sample.id == detection.sample_id
+            ).first() if detection else None
+
+            if sample:
+                final_label = suggestion.suggested_label if action == "accepted" else sample.current_label
+                fb_action = "approve" if action == "accepted" else "reject"
+                
+                FeedbackService.create_feedback_from_suggestion(
+                    db,
+                    suggestion=suggestion,
+                    action=fb_action,
+                    final_label=final_label
+                )
+
+            updated += 1
+
+    db.commit()
+    return {"updated": updated, "action": action, "requested": len(suggestion_ids)}
+
+
+
 @router.get("/{suggestion_id}", response_model=SuggestionResponse)
 async def get_suggestion(
     suggestion_id: int = Path(..., description="Suggestion ID"),
@@ -110,6 +187,7 @@ async def get_suggestion_details(
     """
     result = SuggestionService.get_suggestion_with_detection(db, suggestion_id)
     return result
+
 
 
 @router.patch("/{suggestion_id}/status", response_model=SuggestionResponse)
@@ -138,28 +216,17 @@ async def update_suggestion_status(
     return suggestion
 
 
-@router.get("/stats/{dataset_id}", response_model=SuggestionStatsResponse)
-async def get_suggestion_stats(
-    dataset_id: int = Path(..., description="Dataset ID"),
-    db: Session = Depends(get_db)
-):
-    """
-    Get suggestion statistics for a dataset
-    
-    Returns counts by status and acceptance rate.
-    """
-    stats = SuggestionService.get_suggestion_stats(db, dataset_id)
-    return stats
+
+
+
 
 
 @router.delete("/{suggestion_id}")
 async def delete_suggestion(
     suggestion_id: int = Path(..., description="Suggestion ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Delete a suggestion (admin only - use with caution)"""
-    suggestion = SuggestionService.get_suggestion_by_id(db, suggestion_id)
-    db.delete(suggestion)
-    db.commit()
-    
+    SuggestionService.delete_suggestion(db, suggestion_id)
     return {"message": "Suggestion deleted successfully", "id": suggestion_id}
+

@@ -10,9 +10,10 @@ from typing import Dict, Any, Tuple
 import numpy as np
 import json
 import logging
-from datetime import datetime
+from datetime import datetime,timezone
+import pandas as pd
 
-from services.ml_integration import get_ml_integration
+# ml_integration imported inside retrain_and_evaluate
 
 logger = logging.getLogger(__name__)
 
@@ -75,33 +76,60 @@ class RetrainService:
         logger.info(f"Train: {len(X_train)} samples, Test: {len(X_test)} samples")
         
         # Get ML integration
-        ml = get_ml_integration()
-        
-        # Get model config
-        model_name = ml.config.get("model", {}).get("name", "random_forest")
-        model_params = ml.config.get("model", {}).get("params", {
-            "n_estimators": 100,
-            "random_state": 42,
-            "n_jobs": -1
-        })
-        
-        # Train new model on corrected data
-        logger.info(f"Training {model_name} on corrected dataset...")
-        
-        from ml_pipeline.src.data.model_trainer import get_model
-        retrained_model = get_model(model_name, model_params)
-        
-        # Time the training
         import time
+        from services.ml_integration import run_learning_cycle
+        from self_learning_engine.metrics import MetricsComputer
+
         start_time = time.time()
-        retrained_model.train(X_train, y_train)
+
+        cycle_result = run_learning_cycle(dataset_id)
         training_time = time.time() - start_time
-        
-        logger.info(f"✅ Training complete in {training_time:.2f}s")
-        
-        # Evaluate on test set
-        y_pred = retrained_model.predict(X_test)
-        metrics = ml.evaluate_model(X_test, y_test, y_pred)
+
+        logger.info(f"✅ Learning cycle complete in {training_time:.2f}s")
+        logger.info(f"   meta_trained={cycle_result['meta_model']['trained']}")
+        logger.info(f"   retrained={cycle_result['retrain']['retrained']}")
+        logger.info(f"   new_threshold={cycle_result['threshold']['new_threshold']:.3f}")
+
+        # Evaluate current engine performance on test split
+        from services.engine_registry import get_engine_registry
+        registry = get_engine_registry()
+        engine = registry.get(dataset_id)
+
+        if engine is not None and engine._fitted:
+       
+        # Build DataFrame with correct column names matching what engine was fitted on
+            feature_cols = list(engine._X_original.columns)
+            if X_test.shape[1] == len(feature_cols):
+                X_test_df = pd.DataFrame(X_test, columns=feature_cols)
+            else:
+                # Fallback: generate generic names consistent with ml_integration
+                X_test_df = pd.DataFrame(
+                    X_test,
+                    columns=[f"feature_{i}" for i in range(X_test.shape[1])]
+                )
+            X_test_transformed = engine._preprocessor.transform(X_test_df)
+            y_pred = engine._ensemble.predict(X_test_transformed)
+            mc = MetricsComputer()
+            m = mc.compute_model_metrics(y_test, y_pred, engine._ensemble.classes_)
+            metrics = {
+                "accuracy": m["accuracy"],
+                "precision": m["precision_weighted"],
+                "recall": m["recall_weighted"],
+                "f1_score": m["f1_weighted"],
+            }
+        else:
+            # Engine not retrained yet — use sklearn directly on corrected data
+            from sklearn.ensemble import RandomForestClassifier
+            clf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+            clf.fit(X_train, y_train)
+            y_pred = clf.predict(X_test)
+            from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+            metrics = {
+                "accuracy": float(accuracy_score(y_test, y_pred)),
+                "precision": float(precision_score(y_test, y_pred, average="weighted", zero_division=0)),
+                "recall": float(recall_score(y_test, y_pred, average="weighted", zero_division=0)),
+                "f1_score": float(f1_score(y_test, y_pred, average="weighted", zero_division=0)),
+            }
         
         logger.info(f"📊 Test Metrics:")
         logger.info(f"   Accuracy: {metrics['accuracy']:.4f}")
@@ -118,30 +146,54 @@ class RetrainService:
         
         # Calculate improvement
         if baseline_model:
-            # Try test_accuracy first, then train_accuracy, then calculate it
             if baseline_model.test_accuracy and baseline_model.test_accuracy > 0:
                 baseline_accuracy = baseline_model.test_accuracy
             elif baseline_model.train_accuracy and baseline_model.train_accuracy > 0:
                 baseline_accuracy = baseline_model.train_accuracy
             else:
-                # Baseline exists but no metrics - this shouldn't happen
                 logger.warning("Baseline model has no stored metrics!")
                 baseline_accuracy = 0.0
+ 
+            baseline_precision = baseline_model.precision or 0.0
+            baseline_recall = baseline_model.recall or 0.0
+            baseline_f1 = baseline_model.f1_score or 0.0
         else:
             logger.warning("No baseline model found!")
             baseline_accuracy = 0.0
-
-    # Also get baseline's other metrics for comparison
-        baseline_precision = baseline_model.precision if baseline_model else 0.0
-        baseline_recall = baseline_model.recall if baseline_model else 0.0
-        baseline_f1 = baseline_model.f1_score if baseline_model else 0.0
+            baseline_precision = 0.0
+            baseline_recall = 0.0
+            baseline_f1 = 0.0
+ 
         improvement = metrics['accuracy'] - baseline_accuracy
-        improvement_pct = (improvement / baseline_accuracy * 100) if baseline_accuracy > 0 else 0
-        
-        logger.info(f"📈 Improvement over baseline:")
-        logger.info(f"   Baseline: {baseline_accuracy:.4f}")
-        logger.info(f"   After corrections: {metrics['accuracy']:.4f}")
-        logger.info(f"   Improvement: {improvement:+.4f} ({improvement_pct:+.2f}%)")
+        improvement_pct = (
+            (improvement / baseline_accuracy * 100) if baseline_accuracy > 0 else 0.0
+        )
+ 
+        logger.info(
+            f"Improvement over baseline: {baseline_accuracy:.4f} → "
+            f"{metrics['accuracy']:.4f} ({improvement_pct:+.2f}%)"
+        )
+
+        model_name = "self_learning_engine"
+        model_params = {
+            "contamination": 0.1,
+            "initial_threshold": 0.5,
+            "n_estimators": 100,
+        }
+
+        existing_retrained = db.query(MLModel).filter(
+            MLModel.dataset_id == dataset_id,
+            MLModel.name == f"{model_name.replace('_', ' ').title()} (Iteration {iteration})",
+            MLModel.is_active == True
+        ).first()
+
+        if existing_retrained:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model for iteration {iteration} already exists (ID: {existing_retrained.id}). "
+                       f"Use a different iteration number or delete the existing model first."
+            )
+
         
         # Create new model entry for retrained model
         retrained_model_db = MLModel(
@@ -226,7 +278,7 @@ class RetrainService:
                 "labels_changed": labels_changed,
                 "noise_reduced_pct": round(noise_reduced, 2)
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     
     @staticmethod

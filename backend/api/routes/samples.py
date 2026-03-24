@@ -32,30 +32,6 @@ async def get_samples(
     return samples
 
 
-@router.get("/{sample_id}", response_model=SampleResponse)
-async def get_sample(sample_id: int, db: Session = Depends(get_db)):
-    """Get a specific sample by ID"""
-    sample = db.query(Sample).filter(Sample.id == sample_id).first()
-    if not sample:
-        raise HTTPException(status_code=404, detail="Sample not found")
-    return sample
-
-
-@router.get("/{sample_id}/features")
-async def get_sample_features(sample_id: int, db: Session = Depends(get_db)):
-    """Get sample features as parsed JSON"""
-    sample = db.query(Sample).filter(Sample.id == sample_id).first()
-    if not sample:
-        raise HTTPException(status_code=404, detail="Sample not found")
-    
-    return {
-        "sample_id": sample.id,
-        "features": json.loads(sample.features),
-        "current_label": sample.current_label,
-        "original_label": sample.original_label
-    }
-
-
 @router.get("/dataset/{dataset_id}/stats")
 async def get_dataset_stats(dataset_id: int, db: Session = Depends(get_db)):
     """Get statistics for a dataset"""
@@ -83,3 +59,29 @@ async def get_dataset_stats(dataset_id: int, db: Session = Depends(get_db)):
         "noisy_labels": mismatches,
         "noise_percentage": round((mismatches / total * 100) if total > 0 else 0, 2)
     }
+
+
+@router.get("/{sample_id}", response_model=SampleResponse)
+async def get_sample(sample_id: int, db: Session = Depends(get_db)):
+    """Get a specific sample by ID"""
+    sample = db.query(Sample).filter(Sample.id == sample_id).first()
+    if not sample:
+        raise HTTPException(status_code=404, detail="Sample not found")
+    return sample
+
+
+@router.get("/{sample_id}/features")
+async def get_sample_features(sample_id: int, db: Session = Depends(get_db)):
+    """Get sample features as parsed JSON"""
+    sample = db.query(Sample).filter(Sample.id == sample_id).first()
+    if not sample:
+        raise HTTPException(status_code=404, detail="Sample not found")
+    
+    return {
+        "sample_id": sample.id,
+        "features": json.loads(sample.features),
+        "current_label": sample.current_label,
+        "original_label": sample.original_label
+    }
+
+

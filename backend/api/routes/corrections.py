@@ -2,11 +2,12 @@
 Correction API routes
 Apply corrections from feedback and export cleaned datasets
 """
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query , HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from core.database import get_db
 import os
+
 from services.correction_service import CorrectionService
 from schemas.correction import (
     CorrectionApplyResponse,
@@ -90,7 +91,7 @@ async def preview_corrections(
         if not sample:
             continue
         
-        if feedback.action in ['accept', 'modify']:
+        if feedback.action in ['approve', 'modify']:
             corrections_to_apply += 1
             if sample.current_label != feedback.final_label:
                 labels_to_change += 1
@@ -189,3 +190,4 @@ async def download_cleaned_dataset(
             "Content-Disposition": f"attachment; filename={os.path.basename(result['file_path'])}"
         }
     )
+

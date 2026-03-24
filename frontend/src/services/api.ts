@@ -1,6 +1,7 @@
 import axios from "axios";
 import type { Dataset, DatasetStats } from "../types/dataset";
-import type { MLModel, ModelIteration, ModelComparisonItem } from "../types/model";
+import type { MLModel, ModelIteration, ModelComparisonItem, ModelComparisonResponse } from "../types/model";
+
 import type {
   Experiment,
   ExperimentIteration,
@@ -33,8 +34,22 @@ import type {
   FeedbackListResponse,
   FeedbackFilters,
 } from "../types/feedback";
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+export interface BenchmarkResult {
+  id: number;
+  dataset_id: number;
+  tool: 'sldce' | 'cleanlab' | 'random' | 'no_correction';
+  iteration: number;
+  precision: number | null;
+  recall: number | null;
+  accuracy: number | null;
+  f1: number | null;
+  human_effort: number | null;
+  meta: Record<string, any> | null;
+  created_at: string;
+}
+
+  const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "http://localhost:8001";
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -42,6 +57,37 @@ export const api = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error.response?.status;
+    const detail = error.response?.data?.detail;
+
+    // Build human-readable message
+    let message: string;
+    if (typeof detail === 'string' && detail.length > 0) {
+      message = detail;
+    } else if (status === 400) {
+      message = 'Invalid request — please check your input.';
+    } else if (status === 404) {
+      message = 'Not found — the requested resource does not exist.';
+    } else if (status === 422) {
+      message = 'Validation error — check required fields.';
+    } else if (status === 500) {
+      message = 'Server error — please try again or contact support.';
+    } else if (!error.response) {
+      message = 'Cannot reach the server — is the backend running on port 8001?';
+    } else {
+      message = `Unexpected error (${status}).`;
+    }
+
+    // Import toast lazily to avoid circular deps
+    import('sonner').then(({ toast }) => toast.error(message));
+
+    return Promise.reject(error);
+  }
+);
 
 // Dataset API calls
 export const datasetAPI = {
@@ -230,13 +276,15 @@ export const detectionAPI = {
     return response.data;
   },
 
-  // Generate suggestions
-  generateSuggestions: async (
+ generateSuggestions: async (
     datasetId: number,
-    iteration: number = 1
+    iteration?: number   // ← make optional
   ): Promise<SuggestionGenerateResponse> => {
     const response = await api.post("/api/v1/detection/suggestions", null, {
-      params: { dataset_id: datasetId, iteration },
+      params: { 
+        dataset_id: datasetId,
+        ...(iteration !== undefined && { iteration })  // only send if provided
+      },
     });
     return response.data;
   },
@@ -317,6 +365,15 @@ export const suggestionAPI = {
   delete: async (suggestionId: number): Promise<void> => {
     await api.delete(`/api/v1/suggestions/${suggestionId}`);
   },
+
+
+  batchUpdate: async (suggestionIds: number[], action: 'accepted' | 'rejected'): Promise<any> => {
+  const response = await api.post('/api/v1/suggestions/batch-update', {
+    suggestion_ids: suggestionIds,
+    action,
+  });
+  return response.data;
+},
 };
 
 
@@ -389,23 +446,35 @@ export const correctionsAPI = {
     const response = await api.get(`/api/v1/corrections/summary/${datasetId}`);
     return response.data;
   },
+
+  downloadCorrected: async (datasetId: number): Promise<void> => {
+  const response = await api.get(`/api/v1/corrections/download/${datasetId}`, {
+    responseType: 'blob',
+  });
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `corrected_dataset_${datasetId}.csv`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+},
 };
 
 //  Retrain API
 export const retrainAPI = {
   // Retrain model
-  retrain: async (datasetId: number, iteration: number = 1, testSize: number = 0.2): Promise<any> => {
-    const response = await api.post(`/api/v1/retrain/retrain/${datasetId}`, null, {
-      params: { iteration, test_size: testSize },
-    });
-    return response.data;
-  },
+  retrain: async (datasetId: number, iteration: number = 1, testSize: number = 0.2) => {
+  const response = await api.post(`/api/v1/retrain/${datasetId}`, null, {
+    params: { iteration, test_size: testSize },
+  });
+  return response.data;
+},
 
   // Compare models
-  compare: async (datasetId: number): Promise<any> => {
-    const response = await api.get(`/api/v1/retrain/compare/${datasetId}`);
-    return response.data;
-  },
+  compare: async (datasetId: number): Promise<ModelComparisonResponse> => {
+  const response = await api.get(`/api/v1/retrain/compare/${datasetId}`);
+  return response.data;
+},
 
   download: async (datasetId: number): Promise<Blob> => {
     const response = await api.get(`/api/v1/corrections/download/${datasetId}`, {
@@ -439,4 +508,86 @@ export const baselineAPI = {
     const response = await api.get(`/api/v1/baseline/check/${datasetId}`);
     return response.data;
   },
+};
+
+
+// Memory / Engine Analytics API
+export const memoryAPI = {
+  // Get full learning analytics for a dataset
+  getAnalytics: async (datasetId: number): Promise<any> => {
+    const response = await api.get(`/api/v1/memory/${datasetId}/analytics`);
+    return response.data;
+  },
+
+  // Get current decision threshold
+  getThreshold: async (datasetId: number): Promise<any> => {
+    const response = await api.get(`/api/v1/memory/${datasetId}/threshold`);
+    return response.data;
+  },
+
+  // Trigger a full learning cycle
+  updateThreshold: async (datasetId: number): Promise<any> => {
+    const response = await api.post(`/api/v1/memory/${datasetId}/update-threshold`);
+    return response.data;
+  },
+
+  // Get engine registry status
+  getStatus: async (datasetId: number): Promise<any> => {
+    const response = await api.get(`/api/v1/memory/${datasetId}/status`);
+    return response.data;
+  },
+};
+
+
+
+// Benchmark API
+export const benchmarkAPI = {
+  // Get all benchmark results for a dataset
+  getResults: async (datasetId: number): Promise<BenchmarkResult[]> => {
+    const response = await api.get(`/api/v1/benchmarks/${datasetId}`);
+    return response.data;
+  },
+
+  // Run full benchmark (all tools)
+  runFull: async (datasetId: number, iterations: number = 5): Promise<any> => {
+    const response = await api.post(`/api/v1/benchmarks/run/${datasetId}`, null, {
+      params: { iterations },
+    });
+    return response.data;
+  },
+
+  // Run individual tools
+  runNoCorrection: async (datasetId: number): Promise<any> => {
+    const response = await api.post(`/api/v1/benchmarks/run/${datasetId}/no-correction`);
+    return response.data;
+  },
+
+  runRandom: async (datasetId: number): Promise<any> => {
+    const response = await api.post(`/api/v1/benchmarks/run/${datasetId}/random`);
+    return response.data;
+  },
+
+  runCleanlab: async (datasetId: number): Promise<any> => {
+    const response = await api.post(`/api/v1/benchmarks/run/${datasetId}/cleanlab`);
+    return response.data;
+  },
+
+  runSldce: async (datasetId: number, iterations: number = 5): Promise<any> => {
+    const response = await api.post(`/api/v1/benchmarks/run/${datasetId}/sldce`, null, {
+      params: { iterations },
+    });
+    return response.data;
+  },
+
+  exportCSV: async (datasetId: number): Promise<void> => {
+  const response = await api.get(`/api/v1/benchmarks/export/${datasetId}`, {
+    responseType: 'blob',
+  });
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `benchmark_results_${datasetId}.csv`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+},
 };

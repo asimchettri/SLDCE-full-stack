@@ -1,14 +1,14 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text, JSON
+
 from sqlalchemy.sql import func
 from core.database import Base
-
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text, JSON, ForeignKey
 
 class MLModel(Base):
     """ML Model metadata table"""
     __tablename__ = "ml_models"
     
     id = Column(Integer, primary_key=True, index=True)
-    dataset_id = Column(Integer, nullable=False, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Model info
     name = Column(String(255), nullable=False)
@@ -46,8 +46,8 @@ class ModelIteration(Base):
     __tablename__ = "model_iterations"
     
     id = Column(Integer, primary_key=True, index=True)
-    model_id = Column(Integer, nullable=False, index=True)
-    dataset_id = Column(Integer, nullable=False, index=True)
+    model_id = Column(Integer, ForeignKey("ml_models.id", ondelete="CASCADE"), nullable=False, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Iteration info
     iteration_number = Column(Integer, nullable=False)
